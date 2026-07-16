@@ -10,12 +10,12 @@ function DownloadButton({ compact = false }: { compact?: boolean }) {
     <>
       <span className="download-mark" aria-hidden="true">↓</span>
       <span>下载 Windows 版</span>
-      {!compact && <small>{downloadUrl ? "点击立即下载安装包" : "安装包链接待配置"}</small>}
+      {!compact && <small>{downloadUrl ? "点击立即下载安装包" : "暂未上线"}</small>}
     </>
   );
 
   if (!downloadUrl) {
-    return <button className={className} type="button" disabled aria-label="Windows 安装包下载地址待配置">{contents}</button>;
+    return <button className={className} type="button" disabled aria-label="Windows 安装包暂未上线">{contents}</button>;
   }
 
   return <a className={className} href={downloadUrl} download aria-label="下载灵感抽屉 Windows 安装包">{contents}</a>;
@@ -121,7 +121,7 @@ export default function Home() {
 
       <section className="download-section" id="download" aria-labelledby="download-title">
         <div className="download-spotlight" />
-        <div className="download-copy"><LogoMark /><span>YOUR IDEAS, YOUR SPACE</span><h2 id="download-title">给每一份素材，一个能彼此连接的位置。</h2><p>下载灵感抽屉，在本地建立属于你的创作资料库与无限画布。</p><DownloadButton compact />{!downloadUrl && <small className="pending-note">安装包地址将在正式发布时接入</small>}</div>
+        <div className="download-copy"><LogoMark /><span>YOUR IDEAS, YOUR SPACE</span><h2 id="download-title">给每一份素材，一个能彼此连接的位置。</h2><p>下载灵感抽屉，在本地建立属于你的创作资料库与无限画布。</p><DownloadButton compact />{!downloadUrl && <small className="pending-note">暂未上线</small>}</div>
       </section>
 
       <footer><a className="footer-brand" href="#top"><LogoMark small /><strong>灵感抽屉</strong></a><p>本地优先的无限画布创作工具。</p><span>© {new Date().getFullYear()} UNMIND.ART</span></footer>

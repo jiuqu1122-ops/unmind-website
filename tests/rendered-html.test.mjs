@@ -22,6 +22,6 @@ test("renders the finished Inspiration Drawer landing page", async () => {
   assert.match(html, /内置工业设计工作流/);
   assert.match(html, /一键完成设计全流程/);
   assert.match(html, /下载 Windows 版/);
-  assert.match(html, /安装包链接待配置/);
+  assert.match(html, /暂未上线/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });

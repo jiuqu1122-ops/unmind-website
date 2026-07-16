@@ -99,7 +99,14 @@ nav a:hover::after { transform: scaleX(1); }
 }
 .download-button:hover:not(:disabled) { box-shadow: 0 22px 44px rgba(42, 99, 229, .36); transform: translateY(-2px); }
 .download-button:focus-visible { outline: 3px solid rgba(47, 114, 255, .3); outline-offset: 3px; }
-.download-button:disabled { cursor: not-allowed; opacity: .82; }
+.download-button:disabled {
+  background: linear-gradient(135deg, #aeb5c2, #8e97a7);
+  box-shadow: 0 14px 30px rgba(42, 52, 70, .18);
+  color: #f7f8fa;
+  cursor: not-allowed;
+  opacity: 1;
+}
+.download-button:disabled small { color: #eef1f5; }
 .download-mark { grid-row: 1/3; font-family: Arial, sans-serif; font-size: 30px; }
 .download-button > span:nth-child(2) { align-self: end; font-size: 16px; font-weight: 900; }
 .download-button small { align-self: start; color: #dce7ff; font-size: 10px; font-weight: 600; }
