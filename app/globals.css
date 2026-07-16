@@ -16,6 +16,8 @@
 html { scroll-behavior: smooth; }
 body {
   margin: 0;
+  min-width: 0;
+  overflow-x: hidden;
   background: var(--paper);
   color: var(--ink);
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
@@ -283,32 +285,81 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
 }
 
 @media (max-width: 700px) {
-  .site-header { width: calc(100% - 32px); height: 76px; }
+  html { scroll-padding-top: 72px; }
+  .site-header { width: calc(100% - 32px); height: 72px; }
+  .brand { min-width: 0; gap: 9px; }
+  .brand .logo-mark { width: 40px; height: 40px; }
+  .brand strong { font-size: 15px; }
+  .brand small { font-size: 7px; letter-spacing: .13em; }
   nav { display: none; }
-  .hero { width: calc(100% - 36px); min-height: auto; gap: 22px; padding: 54px 0 70px; }
-  .hero h1 { font-size: 40px; }
-  .hero-copy > p { font-size: 15px; }
-  .product-scene { min-height: 380px; }
-  .scene-glow { width: 390px; height: 330px; }
-  .workspace-window { width: 720px; height: 440px; transform: scale(.51) perspective(1250px) rotateY(-3deg); }
+  .hero { width: 100%; min-height: auto; gap: 16px; padding: 48px 18px 68px; }
+  .eyebrow { justify-content: center; margin-bottom: 18px; font-size: 10px; letter-spacing: .09em; }
+  .hero h1 { margin-bottom: 22px; font-size: clamp(34px, 10.5vw, 42px); line-height: 1.15; letter-spacing: -.045em; }
+  .hero-copy > p { margin-bottom: 22px; font-size: 14px; line-height: 1.8; }
+  .privacy-pills { margin-bottom: 26px; gap: 6px; }
+  .privacy-pills span { padding: 7px 9px; font-size: 9px; }
+  .hero-actions { width: 100%; }
+  .download-button { width: min(100%, 290px); min-width: 0; }
+  .system-note { text-align: center; }
+  .product-scene { width: 100%; min-height: 350px; overflow: hidden; }
+  .scene-glow { width: 370px; height: 310px; }
+  .workspace-window { width: 720px; height: 440px; transform: scale(.47) perspective(1250px) rotateY(-3deg); transform-origin: center; }
   .floating-tag { font-size: 8px; }
-  .tag-top { top: 24px; right: -4px; }.tag-bottom { bottom: 31px; left: -4px; }
-  .intro { padding-top: 84px; padding-bottom: 90px; }
+  .tag-top { top: 20px; right: 2px; }.tag-bottom { bottom: 25px; left: 2px; }
+  .intro { padding: 82px 18px 88px; }
   .section-heading { margin-bottom: 40px; }
-  .section-heading h2, .download-copy h2, .privacy-band h2 { font-size: 34px; }
-  .feature-grid article { padding: 28px; }
-  .workflow-section { padding-top: 86px; padding-bottom: 86px; }
+  .section-heading h2, .download-copy h2, .privacy-band h2 { font-size: 32px; letter-spacing: -.035em; }
+  .section-heading p { font-size: 14px; line-height: 1.75; }
+  .feature-grid { gap: 12px; }
+  .feature-grid article, .feature-grid article.featured { min-height: 0; padding: 26px; border-radius: 22px; }
+  .feature-icon { width: 52px; height: 52px; margin: 26px 0 20px; border-radius: 16px; }
+  .feature-grid h3 { font-size: 20px; }
+  .feature-grid p { font-size: 13px; }
+  .workflow-section { padding: 82px 18px; }
   .workflow-heading { margin-bottom: 38px; }
+  .workflow-heading h2 { font-size: 32px; letter-spacing: -.035em; }
+  .workflow-heading p { font-size: 14px; line-height: 1.8; }
   .workflow-track { grid-template-columns: 1fr; }
-  .workflow-track article { min-height: 175px; }
+  .workflow-track article { min-height: 165px; padding: 22px; }
   .workflow-track article > i { margin: 22px 0 15px; }
-  .workflow-action { flex-direction: column; gap: 8px; text-align: center; }
+  .workflow-action { width: 100%; padding: 16px; flex-direction: column; gap: 8px; text-align: center; }
   .workflow-action small { padding: 8px 0 0; border-top: 1px solid rgba(255,255,255,.25); border-left: 0; }
-  .privacy-band { width: calc(100% - 32px); padding: 78px 0; }
-  .privacy-visual { min-height: 280px; transform: scale(.82); }
-  .download-section { min-height: 570px; padding: 90px 24px; }
+  .privacy-band { width: 100%; padding: 74px 18px; gap: 16px; }
+  .privacy-band p { font-size: 14px; line-height: 1.8; }
+  .privacy-band li { font-size: 12px; }
+  .privacy-visual { min-height: 270px; transform: scale(.78); }
+  .download-section { min-height: 530px; padding: 84px 18px; }
+  .download-section::before { width: 520px; height: 520px; }
+  .download-section::after { width: 620px; height: 360px; }
+  .download-spotlight { width: 390px; height: 390px; }
+  .download-copy { width: 100%; }
+  .download-copy .logo-mark { width: 64px; height: 64px; margin-bottom: 24px; }
+  .download-copy p { font-size: 14px; }
+  .download-button.compact { width: min(100%, 240px); min-width: 0; }
   footer { grid-template-columns: 1fr; justify-items: center; padding: 38px 24px; text-align: center; }
   footer > span { justify-self: center; }
+}
+
+@media (max-width: 420px) {
+  .site-header { width: calc(100% - 28px); }
+  .brand .logo-mark { width: 37px; height: 37px; }
+  .hero { padding: 38px 14px 60px; }
+  .hero h1 { font-size: clamp(32px, 10vw, 38px); }
+  .hero-copy > p { font-size: 13px; }
+  .privacy-pills { align-items: center; flex-direction: column; }
+  .product-scene { min-height: 300px; }
+  .scene-glow { width: 310px; height: 270px; }
+  .workspace-window { transform: scale(.4) perspective(1250px) rotateY(-2deg); }
+  .floating-tag { display: none; }
+  .intro { padding-right: 14px; padding-left: 14px; }
+  .section-heading h2, .download-copy h2, .privacy-band h2, .workflow-heading h2 { font-size: 29px; }
+  .workflow-section { padding-right: 14px; padding-left: 14px; }
+  .workflow-track article { min-height: 155px; }
+  .privacy-band { padding-right: 14px; padding-left: 14px; }
+  .privacy-visual { min-height: 240px; transform: scale(.7); }
+  .download-section { min-height: 500px; padding-right: 14px; padding-left: 14px; }
+  footer { padding-right: 18px; padding-left: 18px; }
+  footer p { max-width: 260px; line-height: 1.6; }
 }
 
 @media (prefers-reduced-motion: reduce) {
