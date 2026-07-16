@@ -1,11 +1,7 @@
 const downloadUrl = process.env.NEXT_PUBLIC_DOWNLOAD_URL?.trim() ?? "";
 
 function LogoMark({ small = false }: { small?: boolean }) {
-  return (
-    <span className={small ? "logo-mark small" : "logo-mark"} aria-hidden="true">
-      <i /><i /><i /><i />
-    </span>
-  );
+  return <span className={small ? "logo-mark small" : "logo-mark"} aria-hidden="true" />;
 }
 
 function DownloadButton({ compact = false }: { compact?: boolean }) {
