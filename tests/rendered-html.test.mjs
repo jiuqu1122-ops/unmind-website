@@ -1,16 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  return worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
-    { waitUntil() {}, passThroughOnException() {} },
-  );
+  const html = await readFile(new URL("../out/index.html", import.meta.url), "utf8");
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
 }
 
 test("renders the finished Inspiration Drawer landing page", async () => {
@@ -25,6 +19,8 @@ test("renders the finished Inspiration Drawer landing page", async () => {
   assert.match(html, /本地优先/);
   assert.match(html, /创作内容不入库/);
   assert.match(html, /素材集中管理/);
+  assert.match(html, /内置工业设计工作流/);
+  assert.match(html, /一键完成设计全流程/);
   assert.match(html, /下载 Windows 版/);
   assert.match(html, /安装包链接待配置/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);

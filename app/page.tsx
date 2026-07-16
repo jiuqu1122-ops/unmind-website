@@ -38,7 +38,7 @@ export default function Home() {
           <h1 id="hero-title">把素材、思路与创作，<em>放进同一张无限画布。</em></h1>
           <p>灵感抽屉在你的电脑上整理图片、视频、笔记与 AI 生成内容。项目与素材留在本地，方便管理，也让创作过程更私密。</p>
           <div className="privacy-pills" aria-label="产品特性">
-            <span><i>✓</i> 本地存储</span><span><i>✓</i> 云端不留存创作内容</span><span><i>✓</i> 素材集中管理</span>
+            <span><i>✓</i> 本地存储</span><span><i>✓</i> 云端不留存创作内容</span><span><i>✓</i> 工业设计全流程</span>
           </div>
           <div className="hero-actions"><DownloadButton /><span className="system-note">适用于 Windows 10 / 11 · 64 位</span></div>
         </div>
@@ -93,6 +93,25 @@ export default function Home() {
           <article className="featured" id="privacy"><div className="feature-number">02</div><div className="feature-icon">◇</div><h3>创作内容不入库</h3><p>服务器只处理必要的账户、授权与额度信息，不保存你的画布、素材原文件和创作正文。</p><small>使用第三方 AI 时，请求内容仍受所选服务商规则约束。</small></article>
           <article><div className="feature-number">03</div><div className="feature-icon">▦</div><h3>素材集中管理</h3><p>图片、视频、草图、文案和生成结果统一归档。用文件夹、画布节点与连线建立自己的素材体系。</p></article>
         </div>
+      </section>
+
+      <section className="workflow-section" aria-labelledby="workflow-title">
+        <div className="workflow-heading">
+          <div><span>INDUSTRIAL DESIGN WORKFLOW</span><h2 id="workflow-title">内置工业设计工作流，<br />一键完成设计全流程。</h2></div>
+          <p>从模糊需求到可交付方案，Agent 会按工业设计方法组织每个阶段，把参考素材、分析结果和生成内容自动连接到画布。</p>
+        </div>
+        <div className="workflow-track">
+          <article><span>01</span><i>⌕</i><h3>需求拆解</h3><p>明确用户、场景与设计目标</p></article>
+          <b>→</b>
+          <article><span>02</span><i>◎</i><h3>调研洞察</h3><p>整理竞品、趋势与机会点</p></article>
+          <b>→</b>
+          <article><span>03</span><i>✦</i><h3>概念生成</h3><p>快速探索多组造型方向</p></article>
+          <b>→</b>
+          <article><span>04</span><i>◇</i><h3>方案深化</h3><p>完善结构、CMF 与细节</p></article>
+          <b>→</b>
+          <article><span>05</span><i>✓</i><h3>交付整理</h3><p>汇总设计过程与最终成果</p></article>
+        </div>
+        <div className="workflow-action"><span><i>✦</i><strong>启动工业设计工作流</strong></span><small>自动创建阶段节点 · 保留完整设计脉络</small></div>
       </section>
 
       <section className="privacy-band" aria-label="隐私说明">

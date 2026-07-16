@@ -1,0 +1,21 @@
+name: unmind-website
+
+services:
+  website:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_DOWNLOAD_URL: ${NEXT_PUBLIC_DOWNLOAD_URL:-}
+    restart: unless-stopped
+    expose:
+      - "80"
+    networks:
+      - inspiration_backend
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  inspiration_backend:
+    external: true
+    name: inspiration_backend
