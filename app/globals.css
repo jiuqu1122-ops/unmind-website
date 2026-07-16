@@ -301,9 +301,9 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
   .hero-actions { width: 100%; }
   .download-button { width: min(100%, 290px); min-width: 0; }
   .system-note { text-align: center; }
-  .product-scene { width: 100%; min-height: 350px; overflow: hidden; }
-  .scene-glow { width: 370px; height: 310px; }
-  .workspace-window { width: 720px; height: 440px; transform: scale(.47) perspective(1250px) rotateY(-3deg); transform-origin: center; }
+  .product-scene { width: 100%; min-height: 430px; overflow: hidden; }
+  .scene-glow { width: 500px; height: 370px; }
+  .workspace-window { width: 720px; height: 440px; transform: scale(.68) perspective(1250px) rotateY(-3deg); transform-origin: center; }
   .floating-tag { font-size: 8px; }
   .tag-top { top: 20px; right: 2px; }.tag-bottom { bottom: 25px; left: 2px; }
   .intro { padding: 82px 18px 88px; }
@@ -340,16 +340,16 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
   footer > span { justify-self: center; }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 480px) {
   .site-header { width: calc(100% - 28px); }
   .brand .logo-mark { width: 37px; height: 37px; }
   .hero { padding: 38px 14px 60px; }
   .hero h1 { font-size: clamp(32px, 10vw, 38px); }
   .hero-copy > p { font-size: 13px; }
   .privacy-pills { align-items: center; flex-direction: column; }
-  .product-scene { min-height: 300px; }
-  .scene-glow { width: 310px; height: 270px; }
-  .workspace-window { transform: scale(.4) perspective(1250px) rotateY(-2deg); }
+  .product-scene { min-height: 400px; }
+  .scene-glow { width: 400px; height: 340px; }
+  .workspace-window { transform: scale(.65) perspective(1250px) rotateY(-2deg); }
   .floating-tag { display: none; }
   .intro { padding-right: 14px; padding-left: 14px; }
   .section-heading h2, .download-copy h2, .privacy-band h2, .workflow-heading h2 { font-size: 29px; }
@@ -360,6 +360,12 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
   .download-section { min-height: 500px; padding-right: 14px; padding-left: 14px; }
   footer { padding-right: 18px; padding-left: 18px; }
   footer p { max-width: 260px; line-height: 1.6; }
+}
+
+@media (max-width: 360px) {
+  .product-scene { min-height: 350px; }
+  .scene-glow { width: 340px; height: 300px; }
+  .workspace-window { transform: scale(.52) perspective(1250px) rotateY(-1deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
