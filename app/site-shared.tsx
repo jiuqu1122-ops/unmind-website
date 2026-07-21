@@ -1,9 +1,7 @@
 import Link from "next/link";
 
-const defaultDownloadUrl =
+export const downloadUrl =
   "https://gitee.com/zibinyou/inspiration-drawer/releases/download/v5.0.6/Inspiration.Drawer_5.0.6_x64-setup.exe";
-
-export const downloadUrl = process.env.NEXT_PUBLIC_DOWNLOAD_URL?.trim() || defaultDownloadUrl;
 
 export function LogoMark({ small = false }: { small?: boolean }) {
   return <span className={small ? "logo-mark small" : "logo-mark"} aria-hidden="true" />;
