@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 const defaultDownloadUrl =
-  "https://gitee.com/zibinyou/inspiration-drawer/releases/download/v5.0.5/Inspiration.Drawer_5.0.5_x64-setup.exe";
+  "https://gitee.com/zibinyou/inspiration-drawer/releases/download/v5.0.6/Inspiration.Drawer_5.0.6_x64-setup.exe";
 
 export const downloadUrl = process.env.NEXT_PUBLIC_DOWNLOAD_URL?.trim() || defaultDownloadUrl;
 

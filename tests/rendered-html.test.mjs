@@ -26,7 +26,7 @@ test("renders the finished Inspiration Drawer landing page", async () => {
   assert.match(html, /内置工业设计工作流/);
   assert.match(html, /一键完成设计全流程/);
   assert.match(html, /下载 Windows 版/);
-  assert.match(html, /gitee\.com\/zibinyou\/inspiration-drawer\/releases\/download\/v5\.0\.5\/Inspiration\.Drawer_5\.0\.5_x64-setup\.exe/);
+  assert.match(html, /gitee\.com\/zibinyou\/inspiration-drawer\/releases\/download\/v5\.0\.6\/Inspiration\.Drawer_5\.0\.6_x64-setup\.exe/);
   assert.doesNotMatch(html, /暂未上线/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
@@ -46,6 +46,6 @@ test("renders the product feature pages", async () => {
   assert.match(pin, /2 个窗口已置顶/);
 
   for (const html of [materials, notes, pin]) {
-    assert.match(html, /gitee\.com\/zibinyou\/inspiration-drawer\/releases\/download\/v5\.0\.5\/Inspiration\.Drawer_5\.0\.5_x64-setup\.exe/);
+    assert.match(html, /gitee\.com\/zibinyou\/inspiration-drawer\/releases\/download\/v5\.0\.6\/Inspiration\.Drawer_5\.0\.6_x64-setup\.exe/);
   }
 });
