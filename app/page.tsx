@@ -1,36 +1,9 @@
-const downloadUrl = process.env.NEXT_PUBLIC_DOWNLOAD_URL?.trim() ?? "";
-
-function LogoMark({ small = false }: { small?: boolean }) {
-  return <span className={small ? "logo-mark small" : "logo-mark"} aria-hidden="true" />;
-}
-
-function DownloadButton({ compact = false }: { compact?: boolean }) {
-  const className = compact ? "download-button compact" : "download-button";
-  const contents = (
-    <>
-      <span className="download-mark" aria-hidden="true">↓</span>
-      <span>下载 Windows 版</span>
-      {!compact && <small>{downloadUrl ? "点击立即下载安装包" : "暂未上线"}</small>}
-    </>
-  );
-
-  if (!downloadUrl) {
-    return <button className={className} type="button" disabled aria-label="Windows 安装包暂未上线">{contents}</button>;
-  }
-
-  return <a className={className} href={downloadUrl} download aria-label="下载灵感抽屉 Windows 安装包">{contents}</a>;
-}
+import { DownloadButton, LogoMark, SiteFooter, SiteHeader } from "./site-shared";
 
 export default function Home() {
   return (
     <main id="top">
-      <header className="site-header">
-        <a className="brand" href="#top" aria-label="灵感抽屉首页">
-          <LogoMark />
-          <span><strong>灵感抽屉</strong><small>INSPIRATION DRAWER</small></span>
-        </a>
-        <nav aria-label="主导航"><a href="#product">产品介绍</a><a href="#privacy">本地与隐私</a><a href="#download">立即下载</a></nav>
-      </header>
+      <SiteHeader />
 
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-copy">
@@ -95,6 +68,15 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="capabilities-section" aria-labelledby="capabilities-title">
+        <div className="capabilities-heading"><span>MORE THAN A CANVAS</span><h2 id="capabilities-title">从收集到执行，<br />每一步都在同一个工作空间。</h2><p>灵感抽屉把高频创作工具放进统一的本地工作区。需要深入了解时，每项能力都有独立的功能介绍。</p></div>
+        <div className="capability-grid">
+          <a href="/features/materials"><div className="capability-preview material-mini"><i /><i /><i /><span>318</span></div><small>01 · MATERIALS</small><h3>素材管理</h3><p>统一整理图片、视频、文本与项目文件，让素材和画布保持连接。</p><strong>了解素材管理 <span>→</span></strong></a>
+          <a href="/features/notes"><div className="capability-preview notes-mini"><i /><i /><i /><span>21</span></div><small>02 · NOTES & SCHEDULE</small><h3>便签与日程</h3><p>随手记录灵感，安排待办与提醒，把今天需要推进的事情放在眼前。</p><strong>了解便签日程 <span>→</span></strong></a>
+          <a href="/features/pin"><div className="capability-preview pin-mini"><i /><i /><i /><span>⌖</span></div><small>03 · ALWAYS ON TOP</small><h3>截图置顶</h3><p>截取关键区域并保持置顶，边创作边查看参考，不再反复切换窗口。</p><strong>了解截图置顶 <span>→</span></strong></a>
+        </div>
+      </section>
+
       <section className="workflow-section" aria-labelledby="workflow-title">
         <div className="workflow-heading">
           <div><span>INDUSTRIAL DESIGN WORKFLOW</span><h2 id="workflow-title">内置工业设计工作流，<br />一键完成设计全流程。</h2></div>
@@ -121,10 +103,10 @@ export default function Home() {
 
       <section className="download-section" id="download" aria-labelledby="download-title">
         <div className="download-spotlight" />
-        <div className="download-copy"><LogoMark /><span>YOUR IDEAS, YOUR SPACE</span><h2 id="download-title">给每一份素材，一个能彼此连接的位置。</h2><p>下载灵感抽屉，在本地建立属于你的创作资料库与无限画布。</p><DownloadButton compact />{!downloadUrl && <small className="pending-note">暂未上线</small>}</div>
+        <div className="download-copy"><LogoMark /><span>YOUR IDEAS, YOUR SPACE</span><h2 id="download-title">给每一份素材，一个能彼此连接的位置。</h2><p>下载灵感抽屉，在本地建立属于你的创作资料库与无限画布。</p><DownloadButton compact /></div>
       </section>
 
-      <footer><a className="footer-brand" href="#top"><LogoMark small /><strong>灵感抽屉</strong></a><p>本地优先的无限画布创作工具。</p><span>© {new Date().getFullYear()} UNMIND.ART</span></footer>
+      <SiteFooter />
     </main>
   );
 }
