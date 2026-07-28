@@ -29,6 +29,9 @@ test("renders the finished Inspiration Drawer landing page", async () => {
   assert.match(html, /素材集中管理/);
   assert.match(html, /内置工业设计工作流/);
   assert.match(html, /一键完成设计全流程/);
+  assert.match(html, /一键模特换装/);
+  assert.match(html, /一键详情页生成/);
+  assert.match(html, /角色设定套图/);
   assert.match(html, /下载 Windows 版/);
   assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v5\.0\.12\/Inspiration\.Drawer_5\.0\.12_x64-setup\.exe/);
   assert.doesNotMatch(html, /暂未上线/);

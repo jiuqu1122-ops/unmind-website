@@ -77,6 +77,77 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="workflow-library-section" aria-labelledby="workflow-library-title">
+        <div className="workflow-library-heading">
+          <div>
+            <span>READY-TO-USE AI WORKFLOWS</span>
+            <h2 id="workflow-library-title">不止工业设计，<br />高频出图任务也能一键完成。</h2>
+          </div>
+          <div>
+            <p>把重复的提示词、参考图和节点连接保存成工作流。选择模板、替换素材，然后让画布自动完成整套生成过程。</p>
+            <a href="/space">浏览灵感空间 <span>→</span></a>
+          </div>
+        </div>
+
+        <div className="workflow-showcase-grid">
+          <a className="workflow-showcase-card" href="/space">
+            <div className="workflow-card-visual outfit-visual" aria-hidden="true">
+              <div className="outfit-person before"><i /><b /><span>原始服装</span></div>
+              <em>→</em>
+              <div className="outfit-person after"><i /><b /><span>目标穿搭</span></div>
+              <small>人物与背景保持一致</small>
+            </div>
+            <div className="workflow-card-copy">
+              <small>ECOMMERCE · FASHION</small>
+              <h3>一键模特换装</h3>
+              <p>上传服装图并替换工作流图片槽位，保持模特、姿势和背景一致，快速生成不同款式的上身效果。</p>
+              <div><span>固定人物</span><span>服装替换</span><span>批量出图</span></div>
+              <strong>查看换装工作流 <span>→</span></strong>
+            </div>
+          </a>
+
+          <a className="workflow-showcase-card" href="/space">
+            <div className="workflow-card-visual detail-visual" aria-hidden="true">
+              <div className="detail-main"><i /><b /></div>
+              <div className="detail-side"><i /><i /><i /></div>
+              <span>主图</span><span>卖点</span><span>细节</span>
+              <small>一次生成完整商品套图</small>
+            </div>
+            <div className="workflow-card-copy">
+              <small>ECOMMERCE · PRODUCT PAGE</small>
+              <h3>一键详情页生成</h3>
+              <p>从商品主图出发，自动生成卖点场景、材质细节和多角度展示，快速组成统一风格的详情页素材。</p>
+              <div><span>主图套图</span><span>场景生成</span><span>风格统一</span></div>
+              <strong>查看详情页工作流 <span>→</span></strong>
+            </div>
+          </a>
+
+          <a className="workflow-showcase-card compact" href="/space">
+            <div className="workflow-card-visual character-visual" aria-hidden="true">
+              <i /><i /><i /><i /><span>正面</span><span>侧面</span><span>表情</span><span>动作</span>
+            </div>
+            <div className="workflow-card-copy">
+              <small>CHARACTER · CONSISTENCY</small>
+              <h3>角色设定套图</h3>
+              <p>围绕同一角色生成多视角、表情和动作参考，适合短剧、动画与 IP 设定。</p>
+              <strong>查看角色工作流 <span>→</span></strong>
+            </div>
+          </a>
+
+          <a className="workflow-showcase-card compact" href="/space">
+            <div className="workflow-card-visual product-visual" aria-hidden="true">
+              <i /><b /><i /><b /><i /><span>线稿</span><span>效果图</span><span>场景图</span>
+            </div>
+            <div className="workflow-card-copy">
+              <small>INDUSTRIAL DESIGN · VISUALIZATION</small>
+              <h3>产品设计套图</h3>
+              <p>从线稿快速扩展到产品效果图、多视角和场景展示，保留完整的方案演进过程。</p>
+              <strong>查看产品工作流 <span>→</span></strong>
+            </div>
+          </a>
+        </div>
+      </section>
+
       <section className="workflow-section" aria-labelledby="workflow-title">
         <div className="workflow-heading">
           <div><span>INDUSTRIAL DESIGN WORKFLOW</span><h2 id="workflow-title">内置工业设计工作流，<br />一键完成设计全流程。</h2></div>

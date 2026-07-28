@@ -157,6 +157,7 @@ async function parseApi<T>(response: Response): Promise<T> {
 
 export function InspirationSpace() {
   const [items, setItems] = useState<InspirationShare[]>([]);
+  const [previewIndexes, setPreviewIndexes] = useState<Record<string, number>>({});
   const [kindFilter, setKindFilter] = useState<"" | ShareKind>("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -197,6 +198,24 @@ export function InspirationSpace() {
     () => items.reduce((sum, item) => sum + item.downloadCount, 0),
     [items],
   );
+
+  const movePreview = (shareId: string, previewCount: number, offset: number) => {
+    setPreviewIndexes((current) => {
+      const activeIndex = current[shareId] ?? 0;
+      return {
+        ...current,
+        [shareId]: (activeIndex + offset + previewCount) % previewCount,
+      };
+    });
+  };
+
+  const recordDownload = (shareId: string) => {
+    setItems((current) => current.map((item) => (
+      item.id === shareId
+        ? { ...item, downloadCount: item.downloadCount + 1 }
+        : item
+    )));
+  };
 
   const selectJson = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -344,22 +363,84 @@ export function InspirationSpace() {
         {(error || notice) && <div className={error ? styles.error : styles.notice}>{error || notice}</div>}
 
         <div className={styles.grid}>
-          {items.map((item) => (
-            <article key={item.id} className={styles.card}>
-              <div className={styles.cover}>
-                {item.previews[0] ? <img src={item.previews[0].url} alt={`${item.title} 预览`} loading="lazy" /> : <div><span>JSON</span><small>暂无展示图</small></div>}
-                <em>{item.kind === "WORKFLOW" ? "工作流" : "节点预设"}</em>
-                {item.previews.length > 1 && <b>+{item.previews.length - 1}</b>}
-              </div>
-              <div className={styles.cardBody}>
-                <small>{item.authorName} · {new Date(item.createdAt).toLocaleDateString("zh-CN")}</small>
-                <h3>{item.title}</h3>
-                <p>{item.description || "作者没有填写额外说明。"}</p>
-                <div className={styles.tags}>{item.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
-                <footer><span>↓ {item.downloadCount}</span><a href={`${apiBaseUrl}/v1/inspiration-space/${item.id}/download`}>下载 JSON</a></footer>
-              </div>
-            </article>
-          ))}
+          {items.map((item) => {
+            const previewCount = item.previews.length;
+            const previewIndex = previewCount
+              ? Math.min(previewIndexes[item.id] ?? 0, previewCount - 1)
+              : 0;
+            const activePreview = item.previews[previewIndex];
+            return (
+              <article key={item.id} className={styles.card}>
+                <div className={styles.cover}>
+                  {activePreview
+                    ? (
+                        <img
+                          key={activePreview.id}
+                          src={activePreview.url}
+                          alt={`${item.title} 预览 ${previewIndex + 1}`}
+                          loading="lazy"
+                        />
+                      )
+                    : <div className={styles.emptyCover}><span>JSON</span><small>暂无展示图</small></div>}
+                  <em>{item.kind === "WORKFLOW" ? "工作流" : "节点预设"}</em>
+                  {previewCount > 1 && (
+                    <>
+                      <b className={styles.previewCount}>{previewIndex + 1} / {previewCount}</b>
+                      <button
+                        type="button"
+                        className={`${styles.previewArrow} ${styles.previewPrevious}`}
+                        aria-label={`查看 ${item.title} 的上一张图片`}
+                        onClick={() => movePreview(item.id, previewCount, -1)}
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.previewArrow} ${styles.previewNext}`}
+                        aria-label={`查看 ${item.title} 的下一张图片`}
+                        onClick={() => movePreview(item.id, previewCount, 1)}
+                      >
+                        ›
+                      </button>
+                      <div className={styles.previewDots} aria-label={`${item.title} 图片选择`}>
+                        {item.previews.map((preview, index) => (
+                          <button
+                            key={preview.id}
+                            type="button"
+                            className={index === previewIndex ? styles.activeDot : ""}
+                            aria-label={`查看第 ${index + 1} 张图片`}
+                            aria-current={index === previewIndex ? "true" : undefined}
+                            onClick={() => setPreviewIndexes((current) => ({
+                              ...current,
+                              [item.id]: index,
+                            }))}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className={styles.cardBody}>
+                  <small>{item.authorName} · {new Date(item.createdAt).toLocaleDateString("zh-CN")}</small>
+                  <h3>{item.title}</h3>
+                  <p>{item.description || "作者没有填写额外说明。"}</p>
+                  <div className={styles.tags}>{item.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
+                  <div className={styles.cardActions}>
+                    <a
+                      className={styles.downloadLink}
+                      href={`${apiBaseUrl}/v1/inspiration-space/${item.id}/download`}
+                      onClick={() => recordDownload(item.id)}
+                    >
+                      下载 JSON
+                      <span className={styles.downloadBadge} title={`已下载 ${item.downloadCount} 次`}>
+                        {item.downloadCount}
+                      </span>
+                    </a>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
           {!loading && !items.length && <div className={styles.empty}>暂时没有符合条件的分享，成为第一个分享者吧。</div>}
           {loading && <div className={styles.empty}>正在加载灵感空间…</div>}
         </div>
