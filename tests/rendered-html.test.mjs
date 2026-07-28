@@ -11,6 +11,10 @@ async function readRoute(route) {
   return readFile(new URL(`../dist/client/features/${route}/index.html`, import.meta.url), "utf8");
 }
 
+async function readTopLevelRoute(route) {
+  return readFile(new URL(`../dist/client/${route}/index.html`, import.meta.url), "utf8");
+}
+
 test("renders the finished Inspiration Drawer landing page", async () => {
   const response = await render();
   assert.equal(response.status, 200);
@@ -26,7 +30,7 @@ test("renders the finished Inspiration Drawer landing page", async () => {
   assert.match(html, /内置工业设计工作流/);
   assert.match(html, /一键完成设计全流程/);
   assert.match(html, /下载 Windows 版/);
-  assert.match(html, /gitee\.com\/zibinyou\/inspiration-drawer\/releases\/download\/v5\.0\.8\/Inspiration\.Drawer_5\.0\.8_x64-setup\.exe/);
+  assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v5\.0\.12\/Inspiration\.Drawer_5\.0\.12_x64-setup\.exe/);
   assert.doesNotMatch(html, /暂未上线/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
@@ -46,6 +50,19 @@ test("renders the product feature pages", async () => {
   assert.match(pin, /2 个窗口已置顶/);
 
   for (const html of [materials, notes, pin]) {
-    assert.match(html, /gitee\.com\/zibinyou\/inspiration-drawer\/releases\/download\/v5\.0\.8\/Inspiration\.Drawer_5\.0\.8_x64-setup\.exe/);
+    assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v5\.0\.12\/Inspiration\.Drawer_5\.0\.12_x64-setup\.exe/);
   }
+});
+
+test("renders inspiration space and the web admin console", async () => {
+  const [space, admin] = await Promise.all([
+    readTopLevelRoute("space"),
+    readTopLevelRoute("admin"),
+  ]);
+
+  assert.match(space, /灵感空间/);
+  assert.match(space, /分享灵感抽屉节点预设与工作流/);
+  assert.match(space, /上传前自动压缩/);
+  assert.match(admin, /管理员后台/);
+  assert.match(admin, /管理员密钥/);
 });

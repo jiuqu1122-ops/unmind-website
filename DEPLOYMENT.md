@@ -48,19 +48,38 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-当前安装包链接尚未确定，可以让 `.env` 保持：
+确认网站访问的 API 地址和安装包地址：
 
 ```env
 NEXT_PUBLIC_DOWNLOAD_URL=
+NEXT_PUBLIC_API_BASE_URL=https://api.unmind.art
 ```
 
-以后拿到安装包直链后再填写，例如：
+安装包地址留空时会使用代码中的当前稳定版链接，也可以显式填写直链：
 
 ```env
 NEXT_PUBLIC_DOWNLOAD_URL=https://download.example.com/InspirationDrawer-Setup.exe
 ```
 
-该地址会写入静态构建产物，因此每次修改后需要重新构建官网容器。
+这些地址会写入静态构建产物，因此每次修改后需要重新构建官网容器。
+
+灵感空间和网页管理后台依赖后端新接口。上线网站前，先在后端服务器执行数据库迁移，并确保后端 `.env` 包含：
+
+```env
+CORS_ALLOWED_ORIGINS=https://www.unmind.art,https://unmind.art
+```
+
+然后更新后端：
+
+```bash
+cd /opt/inspiration-wallet-server
+git pull --ff-only origin main
+docker compose build api worker
+docker compose run --rm --no-deps api npm run prisma:migrate:deploy
+docker compose up -d api worker
+```
+
+不要把 `ADMIN_API_KEY` 写进官网 `.env`。管理员在 `/admin` 页面手动输入密钥，密钥只保留在该浏览器页面的内存中。
 
 ## 三、启动官网容器
 
@@ -120,6 +139,15 @@ echo
 
 ```text
 https://www.unmind.art
+https://www.unmind.art/space
+https://www.unmind.art/admin
+```
+
+验证灵感空间公开接口和跨域响应：
+
+```bash
+curl -sS https://api.unmind.art/v1/inspiration-space
+curl -I -H 'Origin: https://www.unmind.art' https://api.unmind.art/v1/inspiration-space
 ```
 
 ## 六、以后更新官网

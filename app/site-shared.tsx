@@ -1,7 +1,12 @@
 import Link from "next/link";
 
 export const downloadUrl =
-  "https://gitee.com/zibinyou/inspiration-drawer/releases/download/v5.0.8/Inspiration.Drawer_5.0.8_x64-setup.exe";
+  process.env.NEXT_PUBLIC_DOWNLOAD_URL
+  || "https://github.com/jiuqu1122-ops/inspiration-drawer/releases/download/v5.0.12/Inspiration.Drawer_5.0.12_x64-setup.exe";
+
+export const apiBaseUrl = (
+  process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.unmind.art"
+).replace(/\/+$/, "");
 
 export function LogoMark({ small = false }: { small?: boolean }) {
   return <span className={small ? "logo-mark small" : "logo-mark"} aria-hidden="true" />;
@@ -19,13 +24,14 @@ export function DownloadButton({ compact = false }: { compact?: boolean }) {
   );
 }
 
-type SiteSection = "home" | "materials" | "notes" | "pin";
+type SiteSection = "home" | "materials" | "notes" | "pin" | "space" | "admin";
 
 const navigation = [
   { id: "home", href: "/", label: "首页" },
   { id: "materials", href: "/features/materials", label: "素材管理" },
   { id: "notes", href: "/features/notes", label: "便签日程" },
   { id: "pin", href: "/features/pin", label: "截图置顶" },
+  { id: "space", href: "/space", label: "灵感空间" },
 ] as const;
 
 export function SiteHeader({ active = "home" }: { active?: SiteSection }) {
@@ -57,7 +63,7 @@ export function SiteFooter() {
     <footer>
       <Link className="footer-brand" href="/"><LogoMark small /><strong>灵感抽屉</strong></Link>
       <p>本地优先的无限画布创作工具。</p>
-      <span>© {new Date().getFullYear()} UNMIND.ART</span>
+      <span>© {new Date().getFullYear()} UNMIND.ART · <Link href="/admin">管理入口</Link></span>
     </footer>
   );
 }
