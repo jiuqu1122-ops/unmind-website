@@ -36,7 +36,7 @@ test("renders the finished Inspiration Drawer landing page", async () => {
   assert.match(html, /联系我们/);
   assert.match(html, /微信联系/);
   assert.match(html, /contact-wechat-qr\.png/);
-  assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v5\.0\.12\/Inspiration\.Drawer_5\.0\.12_x64-setup\.exe/);
+  assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v5\.0\.15\/Inspiration\.Drawer_5\.0\.15_x64-setup\.exe/);
   assert.doesNotMatch(html, /暂未上线/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
@@ -56,7 +56,7 @@ test("renders the product feature pages", async () => {
   assert.match(pin, /2 个窗口已置顶/);
 
   for (const html of [materials, notes, pin]) {
-    assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v5\.0\.12\/Inspiration\.Drawer_5\.0\.12_x64-setup\.exe/);
+    assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v5\.0\.15\/Inspiration\.Drawer_5\.0\.15_x64-setup\.exe/);
   }
 });
 
