@@ -33,6 +33,9 @@ test("renders the finished Inspiration Drawer landing page", async () => {
   assert.match(html, /一键详情页生成/);
   assert.match(html, /角色设定套图/);
   assert.match(html, /下载 Windows 版/);
+  assert.match(html, /联系我们/);
+  assert.match(html, /微信联系/);
+  assert.match(html, /contact-wechat-qr\.png/);
   assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v5\.0\.12\/Inspiration\.Drawer_5\.0\.12_x64-setup\.exe/);
   assert.doesNotMatch(html, /暂未上线/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);

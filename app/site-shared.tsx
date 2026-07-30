@@ -45,12 +45,14 @@ export function SiteHeader({ active = "home" }: { active?: SiteSection }) {
         {navigation.map((item) => (
           <Link key={item.id} href={item.href} className={active === item.id ? "current" : undefined} aria-current={active === item.id ? "page" : undefined}>{item.label}</Link>
         ))}
+        <Link href="/#contact">联系我们</Link>
         <Link href="/#download">立即下载</Link>
       </nav>
       <details className="mobile-menu">
         <summary aria-label="打开导航" title="打开导航">☰</summary>
         <div>
           {navigation.map((item) => <Link key={item.id} href={item.href}>{item.label}</Link>)}
+          <Link href="/#contact">联系我们</Link>
           <Link href="/#download">立即下载</Link>
         </div>
       </details>
@@ -60,10 +62,32 @@ export function SiteHeader({ active = "home" }: { active?: SiteSection }) {
 
 export function SiteFooter() {
   return (
-    <footer>
-      <Link className="footer-brand" href="/"><LogoMark small /><strong>灵感抽屉</strong></Link>
-      <p>本地优先的无限画布创作工具。</p>
-      <span>© {new Date().getFullYear()} UNMIND.ART · <Link href="/admin">管理入口</Link></span>
-    </footer>
+    <>
+      <section className="contact-section" id="contact" aria-labelledby="contact-title">
+        <div className="contact-copy">
+          <span>CONTACT · WECHAT</span>
+          <h2 id="contact-title">有问题，直接聊聊。</h2>
+          <p>产品使用、商务合作或售后支持，欢迎使用微信扫码联系。</p>
+          <small>工作时间内会尽快回复。</small>
+        </div>
+        <a
+          className="contact-qr-card"
+          href="/contact-wechat-qr.png"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="查看微信联系方式二维码原图"
+        >
+          {/* Keep the QR asset pixel-exact instead of routing it through image optimization. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/contact-wechat-qr.png" alt="微信联系方式二维码" width="654" height="645" />
+          <span><strong>微信联系</strong><small>扫码添加 · 点击查看原图</small></span>
+        </a>
+      </section>
+      <footer>
+        <Link className="footer-brand" href="/"><LogoMark small /><strong>灵感抽屉</strong></Link>
+        <p>本地优先的无限画布创作工具。</p>
+        <span>© {new Date().getFullYear()} UNMIND.ART · <Link href="/admin">管理入口</Link></span>
+      </footer>
+    </>
   );
 }
