@@ -47,14 +47,14 @@ export function SiteHeader({ active = "home" }: { active?: SiteSection }) {
           <Link key={item.id} href={item.href} className={active === item.id ? "current" : undefined} aria-current={active === item.id ? "page" : undefined}>{item.label}</Link>
         ))}
         <Link href="/#contact">联系我们</Link>
-        <Link href="/#download">立即下载</Link>
+        <Link className="nav-download" href="/#download">立即下载</Link>
       </nav>
       <details className="mobile-menu">
         <summary aria-label="打开导航" title="打开导航">☰</summary>
         <div>
           {navigation.map((item) => <Link key={item.id} href={item.href}>{item.label}</Link>)}
           <Link href="/#contact">联系我们</Link>
-          <Link href="/#download">立即下载</Link>
+          <Link className="nav-download" href="/#download">立即下载</Link>
         </div>
       </details>
     </header>

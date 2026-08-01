@@ -145,7 +145,7 @@ export function FeaturePage({ kind }: { kind: FeatureKind }) {
       <SiteHeader active={page.active} />
       <section className="feature-hero" aria-labelledby="feature-title">
         <div className="feature-hero-copy">
-          <div className="eyebrow"><span /> {page.eyebrow}</div>
+          <div className="eyebrow">{page.eyebrow}</div>
           <h1 id="feature-title">{page.title}</h1>
           <p>{page.intro}</p>
           <div className="feature-hero-actions"><a className="text-action" href="#details">查看功能细节 <span>↓</span></a><Link href="/#download">下载 Windows 版 <span>→</span></Link></div>
