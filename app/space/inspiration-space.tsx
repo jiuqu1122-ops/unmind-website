@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { apiBaseUrl } from "../site-shared";
 import styles from "./space.module.css";
 
@@ -173,7 +173,7 @@ export function InspirationSpace() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const loadItems = useCallback(async (nextKind: "" | ShareKind = "", nextQuery = "") => {
+  const loadItems = async (nextKind = kindFilter, nextQuery = query) => {
     setLoading(true);
     setError("");
     try {
@@ -188,13 +188,11 @@ export function InspirationSpace() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    // The first request synchronizes the client view with the community API.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadItems();
-  }, [loadItems]);
+    void loadItems("", "");
+  }, []);
 
   const totalDownloads = useMemo(
     () => items.reduce((sum, item) => sum + item.downloadCount, 0),
@@ -351,7 +349,7 @@ export function InspirationSpace() {
       <section className={styles.library}>
         <header>
           <div><span>COMMUNITY LIBRARY</span><h2>最新分享</h2><p>{items.length} 个公开资源 · 累计下载 {totalDownloads} 次</p></div>
-          <form onSubmit={(event) => { event.preventDefault(); void loadItems(kindFilter, query); }}>
+          <form onSubmit={(event) => { event.preventDefault(); void loadItems(); }}>
             <select value={kindFilter} onChange={(event) => { const value = event.target.value as "" | ShareKind; setKindFilter(value); void loadItems(value, query); }}>
               <option value="">全部类型</option>
               <option value="WORKFLOW">工作流</option>

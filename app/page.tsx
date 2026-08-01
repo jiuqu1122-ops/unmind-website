@@ -7,7 +7,7 @@ export default function Home() {
 
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-copy">
-          <div className="eyebrow">LOCAL-FIRST CREATIVE WORKSPACE</div>
+          <div className="eyebrow"><span /> 本地优先的创作工作空间</div>
           <h1 id="hero-title">把素材、思路与创作，<em>放进同一张无限画布。</em></h1>
           <p>灵感抽屉在你的电脑上整理图片、视频、笔记与 AI 生成内容。项目与素材留在本地，方便管理，也让创作过程更私密。</p>
           <div className="privacy-pills" aria-label="产品特性">
@@ -16,22 +16,46 @@ export default function Home() {
           <div className="hero-actions"><DownloadButton /><span className="system-note">适用于 Windows 10 / 11 · 64 位</span></div>
         </div>
 
-        <div className="product-scene" aria-label="灵感抽屉工作台操作演示">
-          <div className="scene-frame">
-            <div className="scene-frame-head">
-              <span><i /> 灵感抽屉工作台</span>
-              <small>真实产品演示</small>
+        <div className="product-scene" aria-label="灵感抽屉无限画布界面示意">
+          <div className="scene-glow" />
+          <div className="workspace-window">
+            <div className="workspace-topbar">
+              <div className="workspace-title"><LogoMark small /><strong>无限画布</strong><i /></div>
+              <div className="topbar-actions"><span>保存快照</span><span>适应画布</span><b>×</b></div>
             </div>
-            <video className="hero-product-video" autoPlay muted loop playsInline preload="metadata">
-              <source src="/inspiration-drawer-tutorial.mp4" type="video/mp4" />
-            </video>
-            <div className="scene-caption">
-              <strong>素材、节点与创作流程，在同一个空间里展开。</strong>
-              <span>4 分钟快速上手</span>
+            <div className="workspace-body">
+              <aside className="workspace-sidebar">
+                <div className="sidebar-primary"><LogoMark small /><strong>无限画布</strong><em>10</em></div>
+                <button type="button">＋ 新建文件夹</button>
+                <div className="folder-row"><i>▱</i><strong>全部素材</strong><em>315</em></div>
+                <div className="folder-row child active"><i>▱</i><strong>AI 生图</strong><em>245</em></div>
+                <div className="folder-row child"><i>▱</i><span>品牌 Logo</span><em>22</em></div>
+                <div className="folder-row child"><i>▱</i><span>草图与提案</span><em>7</em></div>
+                <div className="sidebar-divider" />
+                <div className="folder-row canvas-row selected"><i>▱</i><strong>默认画布</strong></div>
+                <div className="folder-row canvas-row"><i>▱</i><span>灵感农场</span></div>
+              </aside>
+
+              <div className="infinite-canvas">
+                <div className="connector c1" /><div className="connector c2" /><div className="connector c3" /><div className="connector c4" /><div className="connector c5" /><div className="connector c6" /><div className="connector c7" />
+
+                <div className="canvas-node image-node node-a"><div className="node-image blue-one"><i /><i /><i /></div><small>参考素材</small><strong>产品结构草图</strong></div>
+                <div className="canvas-node note-node node-b"><small>灵感笔记</small><strong>探索更轻盈的视觉语言</strong><p>保留结构特征，增加留白和呼吸感。</p></div>
+                <div className="canvas-node image-node node-c"><div className="node-image dark-one"><i /><i /></div><small>AI 图像</small><strong>方向 01 · 科技蓝</strong></div>
+                <div className="canvas-node image-node node-d"><div className="node-image dark-two"><i /><i /></div><small>AI 图像</small><strong>方向 02 · 极简白</strong></div>
+                <div className="canvas-node gallery-node node-e"><div><i /><i /><i /><i /></div><small>灵感集合</small><strong>材质与光影参考</strong></div>
+                <div className="canvas-node text-node node-f"><span>✦</span><div><small>AI 整理</small><strong>已生成 3 个设计方向</strong></div></div>
+                <div className="canvas-node image-node node-g"><div className="node-image blue-two"><i /><i /></div><small>最终方案</small><strong>视觉方案确认</strong></div>
+                <div className="canvas-node mini-node node-h"><i /><span>视频分镜</span></div>
+                <div className="canvas-node mini-node node-i"><i /><span>文案提纲</span></div>
+
+                <div className="canvas-tools"><span className="active">◎</span><span>▧</span><span>▤</span><span>↻</span><span>⌁</span><span>➤</span><span>T</span><span>✦</span></div>
+                <div className="canvas-status"><i>▧</i> 已整理 59</div>
+              </div>
             </div>
           </div>
-          <div className="scene-note scene-note-top"><span>LOCAL-FIRST</span><strong>你的素材，留在自己的设备上。</strong></div>
-          <div className="scene-note scene-note-bottom"><i /> 无限画布工作区</div>
+          <div className="floating-tag tag-top">素材与节点自由连接</div>
+          <div className="floating-tag tag-bottom"><span>●</span> 本地项目空间</div>
         </div>
       </section>
 
