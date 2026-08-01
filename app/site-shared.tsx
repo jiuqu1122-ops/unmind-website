@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export const downloadUrl =
   process.env.NEXT_PUBLIC_DOWNLOAD_URL
-  || "https://github.com/jiuqu1122-ops/inspiration-drawer/releases/download/v5.0.15/Inspiration.Drawer_5.0.15_x64-setup.exe";
+  || "https://github.com/jiuqu1122-ops/inspiration-drawer/releases/download/v6.0.1/Inspiration.Drawer_6.0.1_x64-setup.exe";
 
 export const apiBaseUrl = (
   process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.unmind.art"
