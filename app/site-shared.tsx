@@ -24,10 +24,11 @@ export function DownloadButton({ compact = false }: { compact?: boolean }) {
   );
 }
 
-type SiteSection = "home" | "materials" | "notes" | "pin" | "space" | "admin";
+type SiteSection = "home" | "tutorial" | "materials" | "notes" | "pin" | "space" | "admin";
 
 const navigation = [
   { id: "home", href: "/", label: "首页" },
+  { id: "tutorial", href: "/#tutorial", label: "使用教程" },
   { id: "materials", href: "/features/materials", label: "素材管理" },
   { id: "notes", href: "/features/notes", label: "便签日程" },
   { id: "pin", href: "/features/pin", label: "截图置顶" },

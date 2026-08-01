@@ -317,6 +317,20 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
 .capability-grid > a > strong span { font-size: 18px; transition: transform .18s ease; }
 .capability-grid > a:hover > strong span { transform: translateX(4px); }
 
+.tutorial-section { padding: 112px max(24px,calc((100% - 1240px)/2)); display: grid; grid-template-columns: .72fr 1.28fr; align-items: center; gap: 76px; overflow: hidden; background: #0f1930; color: #fff; }
+.tutorial-copy > span { color: #7da7fa; font-family: Arial,sans-serif; font-size: 10px; font-weight: 900; letter-spacing: .2em; }
+.tutorial-copy h2 { margin: 17px 0 22px; font-size: clamp(36px,4vw,54px); line-height: 1.18; }
+.tutorial-copy p { margin: 0; color: #aab7cf; font-size: 15px; line-height: 1.9; }
+.tutorial-meta { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 8px; }
+.tutorial-meta span { padding: 7px 11px; border: 1px solid rgba(134,171,244,.18); border-radius: 99px; background: rgba(63,105,186,.16); color: #b9cef7; font-size: 9px; font-weight: 900; letter-spacing: .06em; }
+.tutorial-player-shell { position: relative; padding: 11px; border: 1px solid rgba(142,177,244,.2); border-radius: 30px; background: linear-gradient(145deg,rgba(39,67,117,.9),rgba(10,18,34,.96)); box-shadow: 0 36px 80px rgba(3,9,21,.42); }
+.tutorial-player-shell::before { position: absolute; inset: -80px -60px; z-index: 0; background: radial-gradient(circle,rgba(47,114,255,.22),transparent 62%); content: ""; pointer-events: none; }
+.tutorial-player-bar { position: relative; z-index: 1; height: 42px; padding: 0 11px 0 8px; display: flex; align-items: center; justify-content: space-between; color: #b9c7df; font-size: 10px; font-weight: 800; }
+.tutorial-player-bar span { display: flex; align-items: center; gap: 8px; }
+.tutorial-player-bar i { width: 8px; height: 8px; display: inline-block; border-radius: 50%; background: #4d8cff; box-shadow: 0 0 0 5px rgba(77,140,255,.14); }
+.tutorial-player-bar small { color: #7186aa; font-family: Arial,sans-serif; font-size: 9px; }
+.tutorial-video { position: relative; z-index: 1; width: 100%; aspect-ratio: 16/9; display: block; border-radius: 21px; background: #050913; object-fit: contain; }
+
 .workflow-library-section { padding: 118px max(24px,calc((100% - 1240px)/2)); background: #fff; }
 .workflow-library-heading { margin-bottom: 54px; display: grid; grid-template-columns: 1.08fr .92fr; align-items: end; gap: 72px; }
 .workflow-library-heading > div:first-child > span { color: var(--blue); font-family: Arial,sans-serif; font-size: 10px; font-weight: 900; letter-spacing: .2em; }
@@ -551,6 +565,9 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
   .capabilities-heading p { max-width: 650px; margin: 0 auto; }
   .capability-grid { max-width: 620px; margin: 0 auto; grid-template-columns: 1fr; }
   .capability-grid p { min-height: 0; }
+  .tutorial-section { grid-template-columns: 1fr; gap: 42px; }
+  .tutorial-copy { max-width: 680px; margin: 0 auto; text-align: center; }
+  .tutorial-meta { justify-content: center; }
   .workflow-library-heading { grid-template-columns: 1fr; gap: 20px; text-align: center; }
   .workflow-library-heading p { max-width: 650px; margin-right: auto; margin-left: auto; }
   .workflow-library-heading a { justify-content: center; }
@@ -630,6 +647,12 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
   .capabilities-heading h2 { font-size: 32px; }
   .capabilities-heading p { font-size: 14px; line-height: 1.8; }
   .capability-grid > a { border-radius: 18px; }
+  .tutorial-section { padding: 82px 18px; gap: 34px; }
+  .tutorial-copy h2 { font-size: 32px; }
+  .tutorial-copy p { font-size: 14px; line-height: 1.8; }
+  .tutorial-player-shell { padding: 7px; border-radius: 21px; }
+  .tutorial-player-bar { height: 38px; padding-right: 8px; padding-left: 7px; }
+  .tutorial-video { border-radius: 15px; }
   .workflow-library-section { padding: 82px 18px; }
   .workflow-library-heading { margin-bottom: 38px; }
   .workflow-library-heading h2 { font-size: 32px; }
@@ -690,6 +713,11 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
   footer p { max-width: 260px; line-height: 1.6; }
   .capabilities-section { padding-right: 14px; padding-left: 14px; }
   .capability-preview { height: 160px; }
+  .tutorial-section { padding-right: 14px; padding-left: 14px; }
+  .tutorial-copy h2 { font-size: 29px; }
+  .tutorial-player-shell { padding: 5px; border-radius: 17px; }
+  .tutorial-player-bar { height: 34px; }
+  .tutorial-video { border-radius: 12px; }
   .workflow-library-section { padding-right: 14px; padding-left: 14px; }
   .workflow-library-heading h2 { font-size: 29px; }
   .workflow-card-visual { height: 195px; }

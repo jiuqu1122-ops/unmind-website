@@ -77,6 +77,26 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="tutorial-section" id="tutorial" aria-labelledby="tutorial-title">
+        <div className="tutorial-copy">
+          <span>GET STARTED IN MINUTES</span>
+          <h2 id="tutorial-title">4 分钟快速了解灵感抽屉。</h2>
+          <p id="tutorial-description">跟随完整操作演示，了解素材整理、无限画布与创作流程的基本用法。视频可以暂停、拖动进度或全屏观看。</p>
+          <div className="tutorial-meta" aria-label="教程信息">
+            <span>04:42</span>
+            <span>720P</span>
+            <span>操作教程</span>
+          </div>
+        </div>
+        <div className="tutorial-player-shell">
+          <div className="tutorial-player-bar"><span><i /> 灵感抽屉 · 快速上手</span><small>04:42</small></div>
+          <video className="tutorial-video" controls playsInline preload="metadata" aria-describedby="tutorial-description">
+            <source src="/inspiration-drawer-tutorial.mp4" type="video/mp4" />
+            您的浏览器不支持视频播放，可<a href="/inspiration-drawer-tutorial.mp4">下载教程视频</a>查看。
+          </video>
+        </div>
+      </section>
+
       <section className="workflow-library-section" aria-labelledby="workflow-library-title">
         <div className="workflow-library-heading">
           <div>
