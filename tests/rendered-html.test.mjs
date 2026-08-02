@@ -39,7 +39,7 @@ test("renders the finished Inspiration Drawer landing page", async () => {
   assert.match(html, /id="tutorial"/);
   assert.match(html, /inspiration-drawer-tutorial\.mp4/);
   assert.match(html, /04:42/);
-  assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v6\.0\.1\/Inspiration\.Drawer_6\.0\.1_x64-setup\.exe/);
+  assert.match(html, /gitee\.com\/zibinyou\/inspiration-drawer\/releases\/download\/v6\.0\.4\/Inspiration\.Drawer_6\.0\.4_x64-setup\.exe/);
   assert.doesNotMatch(html, /暂未上线/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
@@ -59,7 +59,7 @@ test("renders the product feature pages", async () => {
   assert.match(pin, /2 个窗口已置顶/);
 
   for (const html of [materials, notes, pin]) {
-    assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v6\.0\.1\/Inspiration\.Drawer_6\.0\.1_x64-setup\.exe/);
+    assert.match(html, /gitee\.com\/zibinyou\/inspiration-drawer\/releases\/download\/v6\.0\.4\/Inspiration\.Drawer_6\.0\.4_x64-setup\.exe/);
   }
 });
 
