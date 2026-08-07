@@ -62,10 +62,76 @@
 .reviewBody footer { margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .reviewBody footer button { min-height: 36px; padding: 0 9px; font-size: 10px; }
 .empty { margin: auto; padding: 60px 20px; color: #8a96a9; text-align: center; }
+.userDetailPanel { min-height: 500px; }
+.detailStack { display: grid; gap: 18px; }
+.walletGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.walletGrid article { padding: 14px; display: grid; gap: 7px; border: 1px solid #e0e6f0; border-radius: 12px; background: #f9fbff; }
+.walletGrid small { color: #8190a7; font-size: 10px; }
+.walletGrid strong { color: #1d4fae; font-size: 18px; }
+.compactForm { padding-top: 16px; display: grid; gap: 12px; border-top: 1px solid #edf0f5; }
+.compactForm label,.providerForm label,.basePricingGrid label,.imagePricingList label,.videoPricingList label { display: grid; gap: 7px; color: #4e5b70; font-size: 11px; }
+.compactForm input,.compactForm select,.providerForm input,.providerForm select,.providerForm textarea,.basePricingGrid input,.imagePricingList input,.videoPricingList input { width: 100%; min-width: 0; min-height: 40px; padding: 0 11px; border: 1px solid #d9e1ee; border-radius: 10px; outline: none; background: #f9fbff; color: #172033; font: inherit; }
+.providerForm textarea,.videoPricingList input:not([type="number"]) { padding-top: 10px; padding-bottom: 10px; }
+.compactForm input:focus,.compactForm select:focus,.providerForm input:focus,.providerForm select:focus,.providerForm textarea:focus,.basePricingGrid input:focus,.imagePricingList input:focus,.videoPricingList input:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
+.compactForm button,.providerForm > button,.pricingShell > .saveBar button { min-height: 40px; justify-self: start; padding: 0 16px; border: 0; border-radius: 10px; background: #2868ed; color: white; font-weight: 850; cursor: pointer; }
+.sectionTitle { color: #172033; font-size: 13px; font-weight: 900; }
+.formGridThree { display: grid; grid-template-columns: 1.2fr 1fr .8fr; gap: 10px; }
+.ledgerList { max-height: 250px; margin-top: 10px; display: grid; gap: 6px; overflow: auto; }
+.ledgerList article { padding: 10px 0; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #edf0f5; }
+.ledgerList article > span { min-width: 0; display: grid; gap: 4px; }
+.ledgerList strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.ledgerList small { color: #8894a7; font-size: 9px; }
+.ledgerList em { color: #16835f; font-size: 11px; font-style: normal; font-weight: 900; white-space: nowrap; }
+.ledgerList em[data-negative="true"] { color: #c92f2f; }
+.providerShell { margin-top: 16px; display: grid; grid-template-columns: minmax(300px,.78fr) minmax(500px,1.22fr); gap: 14px; }
+.providerCreateBar { display: flex; flex-wrap: wrap; gap: 7px; padding-bottom: 14px; border-bottom: 1px solid #edf0f5; }
+.providerCreateBar button { min-height: 34px; padding: 0 11px; border: 1px solid #d9e1ee; border-radius: 9px; background: #f9fbff; color: #4d6488; font-size: 10px; font-weight: 850; cursor: pointer; }
+.providerCreateBar button:hover { border-color: #5a8df8; color: #2868ed; }
+.providerList { margin-top: 14px; display: grid; gap: 7px; }
+.providerList > button { width: 100%; min-width: 0; padding: 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #e7ebf2; border-radius: 12px; background: #fafcff; text-align: left; cursor: pointer; }
+.providerList > button.selectedProvider { border-color: #5a8df8; background: #eef4ff; box-shadow: 0 0 0 2px rgba(47,114,255,.08); }
+.providerList > button > span { min-width: 0; display: grid; gap: 4px; }
+.providerList strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.providerList small { overflow: hidden; color: #8894a7; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.providerList em { color: #8894a7; font-size: 10px; font-style: normal; font-weight: 850; white-space: nowrap; }
+.providerList em[data-ok="true"] { color: #16835f; }
+.providerForm { display: grid; gap: 14px; }
+.providerForm > label > strong,.basePricingGrid strong,.imagePricingList label span,.videoPricingList label strong { color: #4e5b70; font-size: 11px; }
+.providerForm .panelTitle { margin-bottom: 2px; }
+.inlineCheck { display: flex!important; align-items: center; gap: 8px!important; color: #4e5b70; font-size: 11px; }
+.inlineCheck input,.capabilities input { width: 15px!important; min-height: 15px!important; accent-color: #2868ed; }
+.capabilities { padding: 12px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 12px; border: 1px solid #e0e6f0; border-radius: 12px; background: #fafcff; }
+.capabilities label { display: flex!important; align-items: center; gap: 7px!important; }
+.capabilities span { color: #53627b; font-size: 10px; }
+.providerStatus { padding: 11px 13px; display: grid; gap: 4px; border: 1px solid #d9e9ff; border-radius: 11px; background: #f1f6ff; color: #2868ed; }
+.providerStatus strong { font-size: 11px; }
+.providerStatus small { color: #71809a; font-size: 9px; }
+.actionRow { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; padding-top: 4px; }
+.actionRow button { min-height: 38px; padding: 0 12px; border: 0; border-radius: 9px; background: #2868ed; color: white; font-size: 10px; font-weight: 850; cursor: pointer; }
+.actionRow button:disabled { cursor: wait; opacity: .55; }
+.actionRow .ghost { border: 1px solid #dbe3f0; background: white; color: #5f6d84; }
+.actionRow .danger { border: 1px solid #f5caca; background: #fff5f5; color: #d64646; }
+.pricingShell { margin-top: 16px; display: grid; gap: 14px; }
+.basePricingGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; }
+.imagePricingList { margin-top: 13px; display: grid; gap: 8px; }
+.imagePricingList article { padding: 11px; display: grid; grid-template-columns: minmax(150px,1fr) repeat(3, minmax(70px, .4fr)); align-items: end; gap: 9px; border-bottom: 1px solid #edf0f5; }
+.imagePricingList article > strong { padding-bottom: 10px; font-size: 12px; }
+.imagePricingList label span { font-size: 9px; }
+.videoPricingList { margin-top: 13px; display: grid; gap: 8px; }
+.videoPricingList article { padding: 12px; border: 1px solid #e7ebf2; border-radius: 12px; background: #fafcff; }
+.videoPriceHead { display: grid; grid-template-columns: 1fr minmax(160px,.4fr); align-items: end; gap: 12px; }
+.videoPriceHead > strong { padding-bottom: 10px; font-size: 12px; }
+.videoPricingList details { margin-top: 10px; border-top: 1px solid #e7ebf2; }
+.videoPricingList summary { padding-top: 10px; color: #5a75a5; cursor: pointer; font-size: 10px; font-weight: 850; }
+.advancedGrid { padding-top: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; }
+.saveBar { position: sticky; bottom: 12px; z-index: 1; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #d9e1ee; border-radius: 13px; background: rgba(255,255,255,.94); box-shadow: 0 12px 30px rgba(35,57,96,.1); color: #71809a; font-size: 10px; backdrop-filter: blur(10px); }
+.saveBar button:disabled { cursor: wait; opacity: .55; }
 @media (max-width: 980px) {
   .metrics { grid-template-columns: repeat(2,1fr); }
   .twoColumns { grid-template-columns: 1fr; }
+  .providerShell { grid-template-columns: 1fr; }
   .reviewGrid { grid-template-columns: repeat(2,1fr); }
+  .basePricingGrid { grid-template-columns: repeat(2,1fr); }
 }
 @media (max-width: 640px) {
   .console { width: calc(100% - 28px); padding-top: 32px; }
@@ -76,4 +142,11 @@
   .reviewGrid { grid-template-columns: 1fr; }
   .panel { min-height: 0; }
   .loginCard { padding: 26px 20px; }
+  .walletGrid { grid-template-columns: repeat(2,1fr); }
+  .formGridThree,.formGrid,.basePricingGrid,.advancedGrid { grid-template-columns: 1fr; }
+  .imagePricingList article { grid-template-columns: 1fr 1fr; }
+  .imagePricingList article > strong { grid-column: 1 / -1; padding-bottom: 0; }
+  .videoPriceHead { grid-template-columns: 1fr; }
+  .saveBar { align-items: stretch; flex-direction: column; }
+  .saveBar button { width: 100%; }
 }
