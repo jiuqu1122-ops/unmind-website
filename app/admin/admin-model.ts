@@ -135,6 +135,10 @@ export type AdminVideoModelPrice = {
   creditsByDuration?: Record<string, string>;
   creditsByResolution?: Record<string, string>;
   creditsByCount?: Record<string, string>;
+  includedReferenceImages?: number;
+  creditsPerExtraReferenceImage?: string;
+  creditsPerReferenceVideoSecond?: string;
+  referenceVideoCreditsByResolution?: Record<string, string>;
 };
 
 export type AdminAiPricing = {
@@ -168,6 +172,10 @@ export type VideoPricingDraft = {
   creditsByDuration: string;
   creditsByResolution: string;
   creditsByCount: string;
+  includedReferenceImages: string;
+  creditsPerExtraReferenceImage: string;
+  creditsPerReferenceVideoSecond: string;
+  referenceVideoCreditsByResolution: string;
 };
 
 export const providerMeta: Record<AdminProviderKind, {
@@ -328,6 +336,12 @@ export const videoPricingDraft = (item: Partial<AdminVideoModelPrice> = {}): Vid
   creditsByDuration: item.creditsByDuration ? JSON.stringify(item.creditsByDuration) : "",
   creditsByResolution: item.creditsByResolution ? JSON.stringify(item.creditsByResolution) : "",
   creditsByCount: item.creditsByCount ? JSON.stringify(item.creditsByCount) : "",
+  includedReferenceImages: item.includedReferenceImages === undefined ? "" : String(item.includedReferenceImages),
+  creditsPerExtraReferenceImage: item.creditsPerExtraReferenceImage ?? "",
+  creditsPerReferenceVideoSecond: item.creditsPerReferenceVideoSecond ?? "",
+  referenceVideoCreditsByResolution: item.referenceVideoCreditsByResolution
+    ? JSON.stringify(item.referenceVideoCreditsByResolution)
+    : "",
 });
 
 export const pricingLabel = (model: string) => {

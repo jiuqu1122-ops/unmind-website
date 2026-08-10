@@ -124,6 +124,9 @@
 .videoPricingList details { margin-top: 10px; border-top: 1px solid #e7ebf2; }
 .videoPricingList summary { padding-top: 10px; color: #5a75a5; cursor: pointer; font-size: 10px; font-weight: 850; }
 .advancedGrid { padding-top: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; }
+.materialPricingTitle { margin-top: 12px; padding-top: 12px; display: flex; align-items: baseline; gap: 8px; border-top: 1px solid #e7ebf2; }
+.materialPricingTitle strong { color: #334155; font-size: 11px; }
+.materialPricingTitle span { color: #7b8799; font-size: 9px; }
 .saveBar { position: sticky; bottom: 12px; z-index: 1; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #d9e1ee; border-radius: 13px; background: rgba(255,255,255,.94); box-shadow: 0 12px 30px rgba(35,57,96,.1); color: #71809a; font-size: 10px; backdrop-filter: blur(10px); }
 .saveBar button:disabled { cursor: wait; opacity: .55; }
 @media (max-width: 980px) {
@@ -147,6 +150,7 @@
   .imagePricingList article { grid-template-columns: 1fr 1fr; }
   .imagePricingList article > strong { grid-column: 1 / -1; padding-bottom: 0; }
   .videoPriceHead { grid-template-columns: 1fr; }
+  .materialPricingTitle { align-items: flex-start; flex-direction: column; gap: 3px; }
   .saveBar { align-items: stretch; flex-direction: column; }
   .saveBar button { width: 100%; }
 }

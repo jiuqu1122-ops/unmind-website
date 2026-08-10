@@ -504,6 +504,15 @@ export function AdminConsole() {
     return result;
   };
 
+  const parseIncludedReferenceImages = (text: string) => {
+    if (!text.trim()) return undefined;
+    const parsed = Number(text);
+    if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 100) {
+      throw new Error("免费参考图片数量必须是 0 到 100 的整数");
+    }
+    return parsed;
+  };
+
   const savePricing = async (event: FormEvent) => {
     event.preventDefault();
     if (!pricing) return;
@@ -518,6 +527,10 @@ export function AdminConsole() {
           creditsByDuration: parseCreditMap(advanced.creditsByDuration),
           creditsByResolution: parseCreditMap(advanced.creditsByResolution),
           creditsByCount: parseCreditMap(advanced.creditsByCount),
+          includedReferenceImages: parseIncludedReferenceImages(advanced.includedReferenceImages),
+          creditsPerExtraReferenceImage: advanced.creditsPerExtraReferenceImage.trim() || undefined,
+          creditsPerReferenceVideoSecond: advanced.creditsPerReferenceVideoSecond.trim() || undefined,
+          referenceVideoCreditsByResolution: parseCreditMap(advanced.referenceVideoCreditsByResolution),
         };
       });
     } catch (reason) {
@@ -530,7 +543,17 @@ export function AdminConsole() {
       pricing.imageDefaultCredits,
       pricing.videoDefaultCredits,
       ...pricing.imageModels.flatMap((item) => [item.credits1k, item.credits2k, item.credits4k].filter(Boolean)),
-      ...videoModels.flatMap((item) => [item.credits, item.creditsPerSecond, item.creditsPerVideo].filter(Boolean)),
+      ...videoModels.flatMap((item) => [
+        item.credits,
+        item.creditsPerSecond,
+        item.creditsPerVideo,
+        item.creditsPerExtraReferenceImage,
+        item.creditsPerReferenceVideoSecond,
+        ...Object.values(item.creditsByDuration || {}),
+        ...Object.values(item.creditsByResolution || {}),
+        ...Object.values(item.creditsByCount || {}),
+        ...Object.values(item.referenceVideoCreditsByResolution || {}),
+      ].filter(Boolean)),
     ];
     if (values.some((value) => !creditPattern.test(String(value)))) {
       setError("所有积分必须是 0 到 1000000 的整数");
@@ -811,6 +834,13 @@ export function AdminConsole() {
                       <label><strong>指定时长总价</strong><input value={videoAdvanced[index]?.creditsByDuration ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsByDuration", event.target.value)} placeholder='{"4":"100"}' /></label>
                       <label><strong>清晰度每秒加分</strong><input value={videoAdvanced[index]?.creditsByResolution ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsByResolution", event.target.value)} placeholder='{"2k":"20"}' /></label>
                       <label><strong>多条生成总价</strong><input value={videoAdvanced[index]?.creditsByCount ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsByCount", event.target.value)} placeholder='{"2":"300"}' /></label>
+                    </div>
+                    <div className={styles.materialPricingTitle}><strong>输入素材计费</strong><span>音频免费；参考视频按生成时长和输出清晰度计费</span></div>
+                    <div className={styles.advancedGrid}>
+                      <label><strong>免费参考图片数</strong><input type="number" min={0} max={100} step={1} value={videoAdvanced[index]?.includedReferenceImages ?? ""} onChange={(event) => updateVideoAdvanced(index, "includedReferenceImages", event.target.value)} placeholder="H3 默认 5" /></label>
+                      <label><strong>超额图片每张积分</strong><input type="number" min={0} max={1000000} step={1} value={videoAdvanced[index]?.creditsPerExtraReferenceImage ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsPerExtraReferenceImage", event.target.value)} placeholder="H3 默认 9" /></label>
+                      <label><strong>参考视频每秒积分</strong><input type="number" min={0} max={1000000} step={1} value={videoAdvanced[index]?.creditsPerReferenceVideoSecond ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsPerReferenceVideoSecond", event.target.value)} placeholder="768P 基础价 15" /></label>
+                      <label><strong>参考视频清晰度每秒加分</strong><input value={videoAdvanced[index]?.referenceVideoCreditsByResolution ?? ""} onChange={(event) => updateVideoAdvanced(index, "referenceVideoCreditsByResolution", event.target.value)} placeholder='{"2k":"10"}' /></label>
                     </div>
                   </details>
                 </article>
