@@ -768,7 +768,13 @@ export function AdminConsole() {
             <form className={styles.providerForm} onSubmit={saveProvider}>
               <div className={styles.panelTitle}><strong>{providerDraft.id ? "编辑渠道" : "新建渠道"}</strong><label className={styles.inlineCheck}><input type="checkbox" checked={providerDraft.enabled} onChange={(event) => setProviderDraft((current) => ({ ...current, enabled: event.target.checked }))} />{providerDraft.enabled ? "启用" : "停用"}</label></div>
               <div className={styles.formGrid}>
-                <label><strong>渠道类型</strong><select disabled={Boolean(providerDraft.id)} value={providerDraft.kind} onChange={(event) => setProviderDraft(newProviderDraft(event.target.value as AdminProviderKind))}>{providerKinds.map((kind) => <option key={kind} value={kind}>{providerMeta[kind].label}</option>)}</select></label>
+                <label>
+                  <strong>渠道类型</strong>
+                  <select disabled={Boolean(providerDraft.id)} value={providerDraft.kind} onChange={(event) => setProviderDraft(newProviderDraft(event.target.value as AdminProviderKind))}>
+                    {providerKinds.map((kind) => <option key={kind} value={kind}>{providerMeta[kind].label}</option>)}
+                  </select>
+                  {providerDraft.id && <small className={styles.fieldHint}>已保存渠道不能修改类型；请点击左侧顶部的渠道按钮新建。</small>}
+                </label>
                 <label><strong>渠道名称</strong><input value={providerDraft.name} onChange={(event) => setProviderDraft((current) => ({ ...current, name: event.target.value }))} maxLength={80} /></label>
               </div>
               <label><strong>API Base URL</strong><input value={providerDraft.baseUrl} onChange={(event) => setProviderDraft((current) => ({ ...current, baseUrl: event.target.value }))} placeholder={providerMeta[providerDraft.kind].placeholder} spellCheck={false} /></label>

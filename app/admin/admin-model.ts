@@ -75,7 +75,7 @@ export type ReviewShare = {
   previews: Array<{ id: string; url: string }>;
 };
 
-export type AdminProviderKind = "NEW_API" | "XAIS" | "MIKOTO" | "BIGMODEL" | "MINIMAX";
+export type AdminProviderKind = "NEW_API" | "XAIS" | "MIKOTO" | "BIGMODEL" | "MINIMAX" | "USELG";
 export type AdminProviderCapability =
   | "LLM"
   | "VISION"
@@ -86,6 +86,7 @@ export type AdminProviderCapability =
   | "IMAGE_NANO_BANANA_PRO_1K"
   | "IMAGE_GPT"
   | "IMAGE_GPT_1K"
+  | "IMAGE_GROK"
   | "VIDEO"
   | "VIDEO_MINIMAX";
 
@@ -214,6 +215,12 @@ export const providerMeta: Record<AdminProviderKind, {
     defaultBaseUrl: "https://metaso.cn",
     placeholder: "https://metaso.cn",
   },
+  USELG: {
+    label: "USELG",
+    defaultName: "uselg",
+    defaultBaseUrl: "https://api.ai-media.vip/v1",
+    placeholder: "https://api.ai-media.vip/v1",
+  },
 };
 
 export const providerKinds = (Object.keys(providerMeta) as AdminProviderKind[]);
@@ -230,8 +237,23 @@ export const providerCapabilities: Array<{
   { value: "IMAGE_NANO_BANANA_DUAL_2K", label: "Banana Pro 2K + Banana 2 2K" },
   { value: "IMAGE_GPT", label: "GPT Image / Image2 生图" },
   { value: "IMAGE_GPT_1K", label: "GPT Image / Image2 1K 生图" },
+  { value: "IMAGE_GROK", label: "Grok Imagine 生图 / 编辑" },
   { value: "VIDEO", label: "视频生成" },
 ];
+
+const defaultProviderModel = (kind: AdminProviderKind) => {
+  if (kind === "MINIMAX") return "MiniMax-H3";
+  if (kind === "USELG") return "gpt-image-2";
+  return "";
+};
+
+const defaultProviderCapabilities = (kind: AdminProviderKind): AdminProviderCapability[] => {
+  if (kind === "MINIMAX") return ["VIDEO_MINIMAX"];
+  if (kind === "USELG") {
+    return ["IMAGE_NANO_BANANA", "IMAGE_NANO_BANANA_2", "IMAGE_GPT", "IMAGE_GROK"];
+  }
+  return ["LLM"];
+};
 
 export const newProviderDraft = (kind: AdminProviderKind = "NEW_API"): ProviderDraft => ({
   id: null,
@@ -239,12 +261,12 @@ export const newProviderDraft = (kind: AdminProviderKind = "NEW_API"): ProviderD
   name: providerMeta[kind].defaultName,
   priority: 100,
   baseUrl: providerMeta[kind].defaultBaseUrl,
-  defaultModel: kind === "MINIMAX" ? "MiniMax-H3" : "",
+  defaultModel: defaultProviderModel(kind),
   allowInsecureHttp: false,
   apiKey: "",
   headersText: "{}",
   replaceHeaders: true,
-  capabilities: kind === "MINIMAX" ? ["VIDEO_MINIMAX"] : ["LLM"],
+  capabilities: defaultProviderCapabilities(kind),
   enabled: true,
 });
 

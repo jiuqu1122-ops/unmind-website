@@ -97,6 +97,7 @@
 .providerList em[data-ok="true"] { color: #16835f; }
 .providerForm { display: grid; gap: 14px; }
 .providerForm > label > strong,.basePricingGrid strong,.imagePricingList label span,.videoPricingList label strong { color: #4e5b70; font-size: 11px; }
+.fieldHint { color: #7a879b; font-size: 10px; line-height: 1.5; }
 .providerForm .panelTitle { margin-bottom: 2px; }
 .inlineCheck { display: flex!important; align-items: center; gap: 8px!important; color: #4e5b70; font-size: 11px; }
 .inlineCheck input,.capabilities input { width: 15px!important; min-height: 15px!important; accent-color: #2868ed; }
