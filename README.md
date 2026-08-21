@@ -16,6 +16,7 @@
 
 ```env
 NEXT_PUBLIC_DOWNLOAD_URL=
+NEXT_PUBLIC_MOBILE_DOWNLOAD_URL=https://inspiration-drawer-prod.oss-cn-hongkong.aliyuncs.com/mobile/Inspiration-Drawer-Mobile-arm64.apk
 NEXT_PUBLIC_API_BASE_URL=https://api.unmind.art
 ```
 
