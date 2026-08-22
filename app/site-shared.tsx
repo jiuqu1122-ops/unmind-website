@@ -1,12 +1,16 @@
 import Link from "next/link";
 
+export const apiBaseUrl = (
+  process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.unmind.art"
+).replace(/\/+$/, "");
+
 export const downloadUrl =
   process.env.NEXT_PUBLIC_DOWNLOAD_URL
   || "https://gitee.com/zibinyou/inspiration-drawer/releases/download/v6.0.4/Inspiration.Drawer_6.0.4_x64-setup.exe";
 
-export const apiBaseUrl = (
-  process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.unmind.art"
-).replace(/\/+$/, "");
+export const mobileDownloadUrl =
+  process.env.NEXT_PUBLIC_MOBILE_DOWNLOAD_URL
+  || `${apiBaseUrl}/v1/mobile/apk`;
 
 export function LogoMark({ small = false }: { small?: boolean }) {
   return <span className={small ? "logo-mark small" : "logo-mark"} aria-hidden="true" />;
@@ -20,6 +24,18 @@ export function DownloadButton({ compact = false }: { compact?: boolean }) {
       <span className="download-mark" aria-hidden="true">↓</span>
       <span>下载 Windows 版</span>
       {!compact && <small>点击立即下载安装包</small>}
+    </a>
+  );
+}
+
+export function MobileDownloadButton({ compact = false }: { compact?: boolean }) {
+  const className = compact ? "download-button compact mobile-download-button" : "download-button mobile-download-button";
+
+  return (
+    <a className={className} href={mobileDownloadUrl} download aria-label="下载灵感抽屉 Android 移动端 APK">
+      <span className="download-mark" aria-hidden="true">↓</span>
+      <span>下载 Android 版</span>
+      {!compact && <small>适用于 Android 手机和平板</small>}
     </a>
   );
 }

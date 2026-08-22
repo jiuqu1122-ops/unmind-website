@@ -118,6 +118,9 @@ nav a.current::after { transform: scaleX(1); }
 .download-button.compact { min-width: 220px; min-height: 58px; margin-top: 10px; grid-template-columns: 34px 1fr; grid-template-rows: 1fr; text-align: center; }
 .download-button.compact .download-mark { grid-row: auto; font-size: 25px; }
 .download-button.compact > span:nth-child(2) { align-self: center; }
+.download-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.mobile-download-button { background: #1d9b72; }
+.mobile-download-button:hover:not(:disabled) { box-shadow: 0 22px 44px rgba(29, 155, 114, .32); }
 .system-note, .pending-note { color: #8490a6; font-size: 11px; font-weight: 600; }
 
 .product-scene { position: relative; min-height: 560px; display: flex; align-items: center; justify-content: center; }

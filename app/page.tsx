@@ -1,4 +1,4 @@
-import { DownloadButton, LogoMark, SiteFooter, SiteHeader } from "./site-shared";
+import { DownloadButton, LogoMark, MobileDownloadButton, SiteFooter, SiteHeader } from "./site-shared";
 
 export default function Home() {
   return (
@@ -194,7 +194,7 @@ export default function Home() {
 
       <section className="download-section" id="download" aria-labelledby="download-title">
         <div className="download-spotlight" />
-        <div className="download-copy"><LogoMark /><span>YOUR IDEAS, YOUR SPACE</span><h2 id="download-title">给每一份素材，一个能彼此连接的位置。</h2><p>下载灵感抽屉，在本地建立属于你的创作资料库与无限画布。</p><DownloadButton compact /></div>
+        <div className="download-copy"><LogoMark /><span>YOUR IDEAS, YOUR SPACE</span><h2 id="download-title">给每一份素材，一个能彼此连接的位置。</h2><p>下载灵感抽屉，在本地建立属于你的创作资料库与无限画布。</p><div className="download-actions"><DownloadButton compact /><MobileDownloadButton compact /></div></div>
       </section>
 
       <SiteFooter />

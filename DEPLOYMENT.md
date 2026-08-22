@@ -53,6 +53,7 @@ chmod 600 .env
 ```env
 NEXT_PUBLIC_DOWNLOAD_URL=
 NEXT_PUBLIC_API_BASE_URL=https://api.unmind.art
+NEXT_PUBLIC_MOBILE_DOWNLOAD_URL=https://api.unmind.art/v1/mobile/apk
 ```
 
 安装包地址留空时会使用代码中的当前稳定版链接，也可以显式填写直链：
