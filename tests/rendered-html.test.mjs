@@ -41,7 +41,7 @@ test("renders the finished Inspiration Drawer landing page", async () => {
   assert.match(html, /inspiration-drawer-tutorial\.mp4/);
   assert.match(html, /04:42/);
   assert.match(html, /gitee\.com\/zibinyou\/inspiration-drawer\/releases\/download\/v6\.0\.4\/Inspiration\.Drawer_6\.0\.4_x64-setup\.exe/);
-  assert.match(html, /inspiration-drawer-prod\.oss-cn-hongkong\.aliyuncs\.com\/mobile\/Inspiration-Drawer-Mobile-arm64\.apk/);
+  assert.match(html, /api\.unmind\.art\/v1\/mobile\/apk/);
   assert.doesNotMatch(html, /暂未上线/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });

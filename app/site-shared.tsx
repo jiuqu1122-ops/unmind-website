@@ -6,7 +6,7 @@ export const downloadUrl =
 
 export const mobileDownloadUrl =
   process.env.NEXT_PUBLIC_MOBILE_DOWNLOAD_URL
-  || "https://inspiration-drawer-prod.oss-cn-hongkong.aliyuncs.com/mobile/Inspiration-Drawer-Mobile-arm64.apk";
+  || "https://api.unmind.art/v1/mobile/apk";
 
 export const apiBaseUrl = (
   process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.unmind.art"
