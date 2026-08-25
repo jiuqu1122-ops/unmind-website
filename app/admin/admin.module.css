@@ -104,6 +104,7 @@
 .capabilities { padding: 12px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 12px; border: 1px solid #e0e6f0; border-radius: 12px; background: #fafcff; }
 .capabilities label { display: flex!important; align-items: center; gap: 7px!important; }
 .capabilities span { color: #53627b; font-size: 10px; }
+.routingHint { display: block; margin-top: -6px; color: #59677d; font-size: 10px; line-height: 1.6; }
 .providerStatus { padding: 11px 13px; display: grid; gap: 4px; border: 1px solid #d9e9ff; border-radius: 11px; background: #f1f6ff; color: #2868ed; }
 .providerStatus strong { font-size: 11px; }
 .providerStatus small { color: #71809a; font-size: 9px; }

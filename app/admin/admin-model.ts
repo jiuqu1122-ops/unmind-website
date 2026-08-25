@@ -218,8 +218,8 @@ export const providerMeta: Record<AdminProviderKind, {
   USELG: {
     label: "USELG",
     defaultName: "uselg",
-    defaultBaseUrl: "https://api.ai-media.vip/v1",
-    placeholder: "https://api.ai-media.vip/v1",
+    defaultBaseUrl: "https://api.uselg.top/v1",
+    placeholder: "https://api.uselg.top/v1",
   },
 };
 
@@ -240,6 +240,27 @@ export const providerCapabilities: Array<{
   { value: "IMAGE_GROK", label: "Grok Imagine 生图 / 编辑" },
   { value: "VIDEO", label: "视频生成" },
 ];
+
+export const getUselgOpenAiRouting = (
+  kind: AdminProviderKind,
+  capabilities: readonly AdminProviderCapability[],
+) => ({
+  agent: kind === "USELG" && capabilities.includes("LLM"),
+  vision: kind === "USELG" && capabilities.includes("VISION"),
+});
+
+export const getUselgOpenAiRoutingHint = (
+  kind: AdminProviderKind,
+  capabilities: readonly AdminProviderCapability[],
+) => {
+  const routing = getUselgOpenAiRouting(kind, capabilities);
+  if (!routing.agent && !routing.vision) return "";
+  const enabled = routing.agent && routing.vision
+    ? "Agent / GPT 与图片分析"
+    : routing.agent ? "Agent / GPT" : "图片分析";
+  const visionRequirement = routing.vision ? " 图片分析的默认模型必须支持 image_url。" : "";
+  return `${enabled}将通过 OpenAI 兼容的 /v1/chat/completions 调用；生图能力仍使用原有接口。${visionRequirement}`;
+};
 
 const defaultProviderModel = (kind: AdminProviderKind) => {
   if (kind === "MINIMAX") return "MiniMax-H3";

@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useState } from "react";
 import { apiBaseUrl } from "../site-shared";
 import {
+  getUselgOpenAiRoutingHint,
   newProviderDraft,
   normalizePricing,
   pricingLabel,
@@ -67,6 +68,10 @@ export function AdminConsole() {
   const [reviews, setReviews] = useState<ReviewShare[]>([]);
   const [providers, setProviders] = useState<AdminProvider[]>([]);
   const [providerDraft, setProviderDraft] = useState<ProviderDraft>(() => newProviderDraft());
+  const uselgOpenAiRoutingHint = getUselgOpenAiRoutingHint(
+    providerDraft.kind,
+    providerDraft.capabilities,
+  );
   const [providerBalance, setProviderBalance] = useState<ProviderBalance | null>(null);
   const [pricing, setPricing] = useState<AdminAiPricing | null>(null);
   const [videoAdvanced, setVideoAdvanced] = useState<Record<number, VideoPricingDraft>>({});
@@ -786,6 +791,7 @@ export function AdminConsole() {
               <div className={styles.capabilities}>
                 {providerCapabilities.map((item) => <label key={item.value}><input type="checkbox" checked={providerDraft.capabilities.includes(item.value)} onChange={() => toggleProviderCapability(item.value)} /><span>{item.label}</span></label>)}
               </div>
+              {uselgOpenAiRoutingHint && <small className={styles.routingHint}>{uselgOpenAiRoutingHint}</small>}
               <label className={styles.inlineCheck}><input type="checkbox" checked={providerDraft.allowInsecureHttp} onChange={(event) => setProviderDraft((current) => ({ ...current, allowInsecureHttp: event.target.checked }))} />允许明文 HTTP</label>
               {providerDraft.id && <label className={styles.inlineCheck}><input type="checkbox" checked={providerDraft.replaceHeaders} onChange={(event) => setProviderDraft((current) => ({ ...current, replaceHeaders: event.target.checked, headersText: "{}" }))} />替换已有自定义 Headers</label>}
               <label><strong>自定义 Headers（JSON）</strong><textarea disabled={Boolean(providerDraft.id) && !providerDraft.replaceHeaders} value={providerDraft.headersText} onChange={(event) => setProviderDraft((current) => ({ ...current, headersText: event.target.value }))} rows={3} spellCheck={false} /></label>
