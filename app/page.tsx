@@ -1,4 +1,4 @@
-import { DownloadButton, LogoMark, MobileDownloadButton, SiteFooter, SiteHeader } from "./site-shared";
+import { DownloadButton, LogoMark, SiteFooter, SiteHeader } from "./site-shared";
 
 export default function Home() {
   return (
@@ -13,7 +13,10 @@ export default function Home() {
           <div className="privacy-pills" aria-label="产品特性">
             <span><i>✓</i> 本地存储</span><span><i>✓</i> 云端不留存创作内容</span><span><i>✓</i> 工业设计全流程</span>
           </div>
-          <div className="hero-actions"><DownloadButton /><span className="system-note">适用于 Windows 10 / 11 · 64 位</span></div>
+          <div className="hero-actions">
+            <div className="hero-download-buttons"><DownloadButton /><DownloadButton platform="android" /></div>
+            <span className="system-note">Windows 10 / 11 · Android 7.0+ 手机与平板</span>
+          </div>
         </div>
 
         <div className="product-scene" aria-label="灵感抽屉无限画布界面示意">
@@ -194,7 +197,7 @@ export default function Home() {
 
       <section className="download-section" id="download" aria-labelledby="download-title">
         <div className="download-spotlight" />
-        <div className="download-copy"><LogoMark /><span>YOUR IDEAS, YOUR SPACE</span><h2 id="download-title">给每一份素材，一个能彼此连接的位置。</h2><p>下载灵感抽屉，在本地建立属于你的创作资料库与无限画布。</p><div className="download-actions"><DownloadButton compact /><MobileDownloadButton compact /></div></div>
+        <div className="download-copy"><LogoMark /><span>YOUR IDEAS, YOUR SPACE</span><h2 id="download-title">给每一份素材，一个能彼此连接的位置。</h2><p>下载灵感抽屉，在电脑、手机或平板上建立属于你的创作资料库与无限画布。</p><div className="download-platform-actions"><DownloadButton compact /><DownloadButton compact platform="android" /></div></div>
       </section>
 
       <SiteFooter />

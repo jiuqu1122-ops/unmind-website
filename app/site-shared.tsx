@@ -16,14 +16,16 @@ export function LogoMark({ small = false }: { small?: boolean }) {
   return <span className={small ? "logo-mark small" : "logo-mark"} aria-hidden="true" />;
 }
 
-export function DownloadButton({ compact = false }: { compact?: boolean }) {
-  const className = compact ? "download-button compact" : "download-button";
+export function DownloadButton({ compact = false, platform = "windows" }: { compact?: boolean; platform?: "windows" | "android" }) {
+  const isAndroid = platform === "android";
+  const className = ["download-button", compact ? "compact" : "", isAndroid ? "android" : ""].filter(Boolean).join(" ");
+  const url = isAndroid ? mobileDownloadUrl : downloadUrl;
 
   return (
-    <a className={className} href={downloadUrl} download aria-label="下载灵感抽屉 Windows 安装包">
+    <a className={className} href={url} download aria-label={`下载灵感抽屉${isAndroid ? "安卓移动端" : " Windows"}安装包`}>
       <span className="download-mark" aria-hidden="true">↓</span>
-      <span>下载 Windows 版</span>
-      {!compact && <small>点击立即下载安装包</small>}
+      <span>{isAndroid ? "下载安卓移动端" : "下载 Windows 版"}</span>
+      {!compact && <small>{isAndroid ? "适用于 Android 手机与平板" : "点击立即下载安装包"}</small>}
     </a>
   );
 }
