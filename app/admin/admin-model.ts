@@ -325,6 +325,8 @@ const modelToken = (model: string) => model.trim().toLowerCase().replace(/[^a-z0
 
 const canonicalImageModel = (model: string) => {
   const token = modelToken(model);
+  if (token.includes("nanobananaprofast")) return "nano-banana-pro-fast";
+  if (token.includes("nanobanana2fast")) return "nano-banana-2-fast";
   if (token.includes("nanobananapro") || token.includes("xaisnanopro") || token.includes("gemini3proimage")) return "nano-banana-pro";
   if (token.includes("nanobanana2") || token.includes("xaisnano2") || token.includes("gemini31flashimage")) return "nano-banana-2";
   if (token.includes("gptimage2") || token.includes("image2") || token.includes("img2")) return "image2";
@@ -338,7 +340,18 @@ const canonicalVideoModel = (model: string) => {
   return model.trim();
 };
 
-const knownImageModels = ["nano-banana-pro", "nano-banana-2", "image2"] as const;
+const knownImageModels = [
+  "nano-banana-pro",
+  "nano-banana-pro-fast",
+  "nano-banana-2",
+  "nano-banana-2-fast",
+  "image2",
+] as const;
+
+const supportsAdminImageOneK = (model: string) => {
+  const token = modelToken(model);
+  return token === "nanobananapro" || token === "image2";
+};
 const knownVideoModels = [
   "seedance2",
   "seedance2fast",
@@ -357,7 +370,7 @@ export const normalizePricing = (pricing: AdminAiPricing): AdminAiPricing => {
     if (existing) return { ...existing, model };
     return {
       model,
-      ...(model !== "nano-banana-2" ? { credits1k: pricing.imageDefaultCredits } : {}),
+      ...(supportsAdminImageOneK(model) ? { credits1k: pricing.imageDefaultCredits } : {}),
       credits2k: pricing.imageDefaultCredits,
       credits4k: pricing.imageDefaultCredits,
     };
@@ -398,6 +411,8 @@ export const pricingLabel = (model: string) => {
   if (token === "klingvideo") return "Kling Video";
   if (token === "klingomnivideo") return "Kling Omni Video";
   if (token === "minimaxh3") return "MiniMax H3";
+  if (token === "nanobananaprofast") return "Nano Banana Pro（稳定高速）";
+  if (token === "nanobanana2fast") return "Nano Banana 2（稳定高速）";
   if (token.includes("nanobananapro")) return "Nano Banana Pro";
   if (token.includes("nanobanana2")) return "Nano Banana 2";
   if (token.includes("image2") || token.includes("gptimage2")) return "GPT Image 2";

@@ -4,6 +4,8 @@ import {
   getUselgOpenAiRouting,
   getUselgOpenAiRoutingHint,
   newProviderDraft,
+  normalizePricing,
+  pricingLabel,
   providerCapabilities,
   providerToDraft,
 } from "../app/admin/admin-model.ts";
@@ -72,4 +74,39 @@ test("fast Banana channels are selectable and preserved without changing their m
 
   assert.deepEqual(draft.capabilities, ["IMAGE_NANO_BANANA_PRO_FAST"]);
   assert.equal(draft.defaultModel, "gemini-3-pro-image");
+});
+
+test("fast Banana pricing has independent 2K and 4K rows", () => {
+  const pricing = normalizePricing({
+    agentRequestCredits: "7",
+    inspirationAnalysisCredits: "3",
+    imageDefaultCredits: "55",
+    videoDefaultCredits: "500",
+    imageModels: [{
+      model: "nano-banana-pro-fast",
+      credits2k: "28",
+      credits4k: "30",
+    }, {
+      model: "nano-banana-2-fast",
+      credits2k: "24",
+      credits4k: "27",
+    }],
+    videoModels: [],
+    updatedAt: null,
+  });
+  const fastPro = pricing.imageModels.find((item) => item.model === "nano-banana-pro-fast");
+  const fastBanana2 = pricing.imageModels.find((item) => item.model === "nano-banana-2-fast");
+
+  assert.deepEqual(fastPro, {
+    model: "nano-banana-pro-fast",
+    credits2k: "28",
+    credits4k: "30",
+  });
+  assert.deepEqual(fastBanana2, {
+    model: "nano-banana-2-fast",
+    credits2k: "24",
+    credits4k: "27",
+  });
+  assert.equal(pricingLabel("nano-banana-pro-fast"), "Nano Banana Pro（稳定高速）");
+  assert.equal(pricingLabel("nano-banana-2-fast"), "Nano Banana 2（稳定高速）");
 });
