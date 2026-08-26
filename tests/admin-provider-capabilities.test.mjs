@@ -4,6 +4,8 @@ import {
   getUselgOpenAiRouting,
   getUselgOpenAiRoutingHint,
   newProviderDraft,
+  providerCapabilities,
+  providerToDraft,
 } from "../app/admin/admin-model.ts";
 
 test("USELG Agent and Vision OpenAI routing can be enabled independently", () => {
@@ -41,4 +43,33 @@ test("new USELG channels use the documented OpenAI-compatible API base", () => {
   assert.equal(draft.baseUrl, "https://api.uselg.top/v1");
   assert.equal(draft.capabilities.includes("LLM"), false);
   assert.equal(draft.capabilities.includes("VISION"), false);
+});
+
+test("fast Banana channels are selectable and preserved without changing their model", () => {
+  const labels = new Map(providerCapabilities.map((item) => [item.value, item.label]));
+  assert.equal(labels.get("IMAGE_NANO_BANANA_PRO_FAST"), "Nano Banana Pro（稳定高速）");
+  assert.equal(labels.get("IMAGE_NANO_BANANA_2_FAST"), "Nano Banana 2（稳定高速）");
+
+  const draft = providerToDraft({
+    id: "fast-banana-pro",
+    name: "高速 Banana Pro",
+    kind: "USELG",
+    enabled: true,
+    priority: 10,
+    baseUrl: "https://fast.example.com/v1",
+    defaultModel: "gemini-3-pro-image",
+    allowInsecureHttp: false,
+    apiKeyConfigured: true,
+    apiKeyLast4: "1234",
+    capabilities: ["IMAGE_NANO_BANANA_PRO_FAST"],
+    lastTestStatus: null,
+    lastTestMessage: null,
+    lastTestModelCount: null,
+    lastTestedAt: null,
+    createdAt: "2026-08-26T00:00:00.000Z",
+    updatedAt: "2026-08-26T00:00:00.000Z",
+  });
+
+  assert.deepEqual(draft.capabilities, ["IMAGE_NANO_BANANA_PRO_FAST"]);
+  assert.equal(draft.defaultModel, "gemini-3-pro-image");
 });

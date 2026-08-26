@@ -82,6 +82,8 @@ export type AdminProviderCapability =
   | "IMAGE"
   | "IMAGE_NANO_BANANA"
   | "IMAGE_NANO_BANANA_2"
+  | "IMAGE_NANO_BANANA_PRO_FAST"
+  | "IMAGE_NANO_BANANA_2_FAST"
   | "IMAGE_NANO_BANANA_DUAL_2K"
   | "IMAGE_NANO_BANANA_PRO_1K"
   | "IMAGE_GPT"
@@ -234,6 +236,8 @@ export const providerCapabilities: Array<{
   { value: "VISION", label: "图片分析 / Vision" },
   { value: "IMAGE_NANO_BANANA", label: "Nano Banana Pro / Gemini 生图" },
   { value: "IMAGE_NANO_BANANA_2", label: "Nano Banana 2 / Gemini 生图" },
+  { value: "IMAGE_NANO_BANANA_PRO_FAST", label: "Nano Banana Pro（稳定高速）" },
+  { value: "IMAGE_NANO_BANANA_2_FAST", label: "Nano Banana 2（稳定高速）" },
   { value: "IMAGE_NANO_BANANA_DUAL_2K", label: "Banana Pro 2K + Banana 2 2K" },
   { value: "IMAGE_GPT", label: "GPT Image / Image2 生图" },
   { value: "IMAGE_GPT_1K", label: "GPT Image / Image2 1K 生图" },
