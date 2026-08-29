@@ -15,6 +15,7 @@
 复制 `.env.example` 为 `.env`：
 
 ```env
+WEBSITE_IMAGE=ghcr.io/jiuqu1122-ops/unmind-website:latest
 NEXT_PUBLIC_DOWNLOAD_URL=
 NEXT_PUBLIC_MOBILE_DOWNLOAD_URL=https://api.unmind.art/v1/mobile/apk
 NEXT_PUBLIC_API_BASE_URL=https://api.unmind.art
@@ -28,8 +29,13 @@ NEXT_PUBLIC_API_BASE_URL=https://api.unmind.art
 npm install
 npm run dev
 npm test
-npm run build:static
+npm run build
 ```
+
+生产环境不会在 2 GiB 服务器上编译。合并到 `main` 后，GitHub Actions 会构建并推送
+`ghcr.io/jiuqu1122-ops/unmind-website:latest`；服务器上的 `scripts/deploy.sh`
+只拉取镜像并重启官网容器。三个 `NEXT_PUBLIC_*` 构建参数可在 GitHub 仓库的
+`Settings → Secrets and variables → Actions → Variables` 中配置。
 
 灵感空间的投稿会在浏览器内压缩 JSON 内嵌图片和额外展示图，再发送到服务端；所有投稿默认进入待审核状态。
 

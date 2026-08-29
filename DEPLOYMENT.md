@@ -51,10 +51,10 @@ chmod 600 .env
 确认网站访问的 API 地址和安装包地址：
 
 ```env
+WEBSITE_IMAGE=ghcr.io/jiuqu1122-ops/unmind-website:latest
 NEXT_PUBLIC_DOWNLOAD_URL=
 NEXT_PUBLIC_MOBILE_DOWNLOAD_URL=https://api.unmind.art/v1/mobile/apk
 NEXT_PUBLIC_API_BASE_URL=https://api.unmind.art
-NEXT_PUBLIC_MOBILE_DOWNLOAD_URL=https://api.unmind.art/v1/mobile/apk
 ```
 
 安装包地址留空时会使用代码中的当前稳定版链接，也可以显式填写直链：
@@ -63,7 +63,9 @@ NEXT_PUBLIC_MOBILE_DOWNLOAD_URL=https://api.unmind.art/v1/mobile/apk
 NEXT_PUBLIC_DOWNLOAD_URL=https://download.example.com/InspirationDrawer-Setup.exe
 ```
 
-这些地址会写入静态构建产物，因此每次修改后需要重新构建官网容器。
+`WEBSITE_IMAGE` 是服务器需要拉取的预构建镜像。三个 `NEXT_PUBLIC_*` 地址会写入静态
+构建产物，请在 GitHub 仓库的 `Settings → Secrets and variables → Actions → Variables`
+中配置；修改后重新运行 `Build website image` 工作流。
 
 灵感空间和网页管理后台依赖后端新接口。上线网站前，先在后端服务器执行数据库迁移，并确保后端 `.env` 包含：
 
@@ -91,11 +93,12 @@ docker compose up -d api worker
 docker network inspect inspiration_backend >/dev/null
 ```
 
-然后构建并启动：
+然后拉取 GitHub Actions 已构建的镜像并启动。不要在 2 GiB 服务器上构建：
 
 ```bash
 cd /opt/unmind-website
-docker compose up -d --build
+docker compose pull website
+docker compose up -d --no-build website
 docker compose ps
 ```
 
@@ -154,7 +157,8 @@ curl -I -H 'Origin: https://www.unmind.art' https://api.unmind.art/v1/inspiratio
 
 ## 六、以后更新官网
 
-本地修改并推送 GitHub 后，在服务器运行：
+本地修改合并到 `main` 后，等待 GitHub Actions 的 `Build website image` 成功，再在
+服务器运行：
 
 ```bash
 cd /opt/unmind-website
@@ -177,23 +181,32 @@ cd /opt/inspiration-wallet-server
 docker compose logs --tail=200 caddy
 ```
 
+如果 GHCR 镜像为私有包，服务器只需登录一次。创建只有 `read:packages` 权限的 GitHub
+Token，然后执行（输入内容不会写入命令历史）：
+
+```bash
+read -rsp 'GHCR token: ' GHCR_TOKEN; echo
+printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u jiuqu1122-ops --password-stdin
+unset GHCR_TOKEN
+```
+
 ## 七、回滚官网
 
-官网没有数据库。回滚只需要切换到上一个稳定提交并重新构建：
+官网没有数据库。GitHub Actions 会同时发布不可变的 `sha-<提交 SHA>` 镜像。回滚时
+直接拉取上一稳定提交的镜像，不需要在服务器编译：
 
 ```bash
 cd /opt/unmind-website
-git log --oneline -10
-git checkout <稳定提交 SHA>
-docker compose up -d --build website
+WEBSITE_IMAGE=ghcr.io/jiuqu1122-ops/unmind-website:sha-<稳定提交完整 SHA> docker compose pull website
+WEBSITE_IMAGE=ghcr.io/jiuqu1122-ops/unmind-website:sha-<稳定提交完整 SHA> docker compose up -d --no-build website
 ```
 
-恢复到主分支：
+恢复到最新正式镜像：
 
 ```bash
-git checkout main
 git pull --ff-only
-docker compose up -d --build website
+docker compose pull website
+docker compose up -d --no-build website
 ```
 
 不要运行后端项目的 `docker compose down -v`，避免影响 PostgreSQL 数据卷。

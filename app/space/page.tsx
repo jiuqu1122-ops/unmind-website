@@ -4,8 +4,8 @@ import { InspirationSpace } from "./inspiration-space";
 import styles from "./space.module.css";
 
 export const metadata: Metadata = {
-  title: "灵感空间｜分享节点预设与工作流",
-  description: "浏览、分享和下载灵感抽屉节点预设与工作流 JSON。",
+  title: "灵感空间｜分享节点预设、工作流与提示词",
+  description: "浏览、分享和下载灵感抽屉节点预设、工作流与创作提示词。",
 };
 
 export default function InspirationSpacePage() {

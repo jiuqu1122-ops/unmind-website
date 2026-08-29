@@ -65,12 +65,13 @@ export type RedemptionCode = {
 
 export type ReviewShare = {
   id: string;
-  kind: "NODE_PRESET" | "WORKFLOW";
+  kind: "NODE_PRESET" | "WORKFLOW" | "PROMPT";
   status: "PENDING" | "PUBLISHED" | "REJECTED";
   title: string;
   description: string | null;
   authorName: string;
   tags: string[];
+  prompt: string | null;
   createdAt: string;
   previews: Array<{ id: string; url: string }>;
 };

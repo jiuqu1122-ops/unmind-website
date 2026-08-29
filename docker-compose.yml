@@ -2,12 +2,8 @@ name: unmind-website
 
 services:
   website:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_DOWNLOAD_URL: ${NEXT_PUBLIC_DOWNLOAD_URL:-}
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-https://api.unmind.art}
+    image: ${WEBSITE_IMAGE:-ghcr.io/jiuqu1122-ops/unmind-website:latest}
+    pull_policy: always
     restart: unless-stopped
     expose:
       - "80"

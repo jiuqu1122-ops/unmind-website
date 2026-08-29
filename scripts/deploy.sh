@@ -16,8 +16,9 @@ docker network inspect inspiration_backend >/dev/null 2>&1 || {
 }
 
 git pull --ff-only
-docker compose build website
-docker compose up -d website
+echo "Pulling prebuilt website image: ${WEBSITE_IMAGE:-ghcr.io/jiuqu1122-ops/unmind-website:latest}"
+docker compose pull website
+docker compose up -d --no-build website
 
 container_id="$(docker compose ps -q website)"
 test -n "$container_id" || { echo "Website container was not created" >&2; exit 1; }

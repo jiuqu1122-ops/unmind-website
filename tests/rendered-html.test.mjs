@@ -72,7 +72,8 @@ test("renders inspiration space and the web admin console", async () => {
   ]);
 
   assert.match(space, /灵感空间/);
-  assert.match(space, /分享灵感抽屉节点预设与工作流/);
+  assert.match(space, /节点预设、工作流与创作提示词/);
+  assert.match(space, /提示词分享/);
   assert.match(space, /上传前自动压缩/);
   assert.match(admin, /管理员后台/);
   assert.match(admin, /管理员密钥/);

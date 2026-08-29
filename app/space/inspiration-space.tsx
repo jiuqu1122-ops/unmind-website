@@ -1,10 +1,11 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { apiBaseUrl } from "../site-shared";
 import styles from "./space.module.css";
 
-type ShareKind = "NODE_PRESET" | "WORKFLOW";
+type ShareKind = "NODE_PRESET" | "WORKFLOW" | "PROMPT";
+type SubmitMode = "JSON" | "PROMPT";
 type PreviewImage = { dataUrl: string; width: number; height: number };
 type InspirationShare = {
   id: string;
@@ -33,6 +34,12 @@ const MAX_IMAGE_DIMENSION = 1_600;
 const MAX_IMAGE_BYTES = 850 * 1024;
 const MAX_EMBEDDED_IMAGES = 30;
 
+const SHARE_KIND_LABELS: Record<ShareKind, string> = {
+  NODE_PRESET: "节点预设",
+  WORKFLOW: "工作流",
+  PROMPT: "提示词",
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -41,6 +48,14 @@ function classifyJson(value: unknown): ShareKind[] {
   const kinds = new Set<ShareKind>();
   const classify = (candidate: unknown) => {
     if (!isRecord(candidate)) return;
+    if (
+      candidate.type === "inspiration-drawer-prompt-share"
+      && typeof candidate.prompt === "string"
+      && candidate.prompt.trim().length > 0
+    ) {
+      kinds.add("PROMPT");
+      return;
+    }
     if (typeof candidate.label === "string" && typeof candidate.prompt === "string") kinds.add("NODE_PRESET");
     if (typeof candidate.label === "string" && Array.isArray(candidate.nodes)) kinds.add("WORKFLOW");
   };
@@ -57,6 +72,26 @@ function classifyJson(value: unknown): ShareKind[] {
     }
   }
   return [...kinds];
+}
+
+function createPromptPayload(title: string, prompt: string) {
+  return {
+    type: "inspiration-drawer-prompt-share",
+    version: 1,
+    title: title.trim(),
+    prompt: prompt.trim(),
+  };
+}
+
+function extractSharedPrompt(value: unknown) {
+  if (
+    isRecord(value)
+    && value.type === "inspiration-drawer-prompt-share"
+    && typeof value.prompt === "string"
+  ) {
+    return value.prompt.trim();
+  }
+  return "";
 }
 
 function blobToDataUrl(blob: Blob) {
@@ -162,7 +197,9 @@ export function InspirationSpace() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [showSubmit, setShowSubmit] = useState(false);
+  const [submitMode, setSubmitMode] = useState<SubmitMode>("JSON");
   const [prepared, setPrepared] = useState<PreparedJson | null>(null);
+  const [promptText, setPromptText] = useState("");
   const [extraPreviews, setExtraPreviews] = useState<PreviewImage[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -172,8 +209,13 @@ export function InspirationSpace() {
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const promptPreviewRequired = submitMode === "PROMPT" || prepared?.kind === "PROMPT";
+  const visibleSubmissionPreviews = [
+    ...(promptPreviewRequired ? extraPreviews.slice(0, 1) : extraPreviews),
+    ...(promptPreviewRequired ? [] : prepared?.embeddedPreviews || []),
+  ].slice(0, 6);
 
-  const loadItems = async (nextKind = kindFilter, nextQuery = query) => {
+  const loadItems = useCallback(async (nextKind: "" | ShareKind = "", nextQuery = "") => {
     setLoading(true);
     setError("");
     try {
@@ -188,11 +230,12 @@ export function InspirationSpace() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void loadItems("", "");
-  }, []);
+    const timer = window.setTimeout(() => void loadItems("", ""), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadItems]);
 
   const totalDownloads = useMemo(
     () => items.reduce((sum, item) => sum + item.downloadCount, 0),
@@ -217,6 +260,22 @@ export function InspirationSpace() {
     )));
   };
 
+  const copyPrompt = async (item: InspirationShare) => {
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`${apiBaseUrl}/v1/inspiration-space/${item.id}/download`);
+      const payload = await parseApi<unknown>(response);
+      const prompt = extractSharedPrompt(payload);
+      if (!prompt) throw new Error("这个分享里没有可复制的提示词内容");
+      await navigator.clipboard.writeText(prompt);
+      recordDownload(item.id);
+      setNotice(`已复制「${item.title}」的提示词`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "提示词复制失败");
+    }
+  };
+
   const selectJson = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -230,13 +289,15 @@ export function InspirationSpace() {
       if (originalBytes > 20 * 1024 * 1024) throw new Error("原始 JSON 不能超过 20 MB");
       const raw = JSON.parse(text) as unknown;
       const kinds = classifyJson(raw);
-      if (!kinds.length) throw new Error("没有识别到灵感抽屉节点预设或工作流");
+      if (!kinds.length) throw new Error("没有识别到灵感抽屉节点预设、工作流或提示词分享");
       setProgress("正在自动压缩 JSON 内嵌图片…");
       const compressed = await compressJsonImages(raw);
       const compressedText = JSON.stringify(compressed.payload);
       const compressedBytes = new Blob([compressedText]).size;
       if (compressedBytes > 8 * 1024 * 1024) throw new Error("压缩后的 JSON 仍超过 8 MB");
-      const kind = kinds.includes("WORKFLOW") ? "WORKFLOW" : "NODE_PRESET";
+      const kind: ShareKind = kinds.includes("WORKFLOW")
+        ? "WORKFLOW"
+        : kinds.includes("NODE_PRESET") ? "NODE_PRESET" : "PROMPT";
       setPrepared({
         fileName: file.name,
         payload: compressed.payload,
@@ -260,7 +321,8 @@ export function InspirationSpace() {
   };
 
   const selectPreviews = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = [...(event.target.files || [])].slice(0, 6);
+    const maxFiles = promptPreviewRequired ? 1 : 6;
+    const files = [...(event.target.files || [])].slice(0, maxFiles);
     event.target.value = "";
     if (!files.length) return;
     setBusy(true);
@@ -284,7 +346,8 @@ export function InspirationSpace() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!prepared) {
+    const isDirectPromptSubmission = submitMode === "PROMPT";
+    if (!isDirectPromptSubmission && !prepared) {
       setError("请先选择 JSON 文件");
       return;
     }
@@ -292,7 +355,26 @@ export function InspirationSpace() {
       setError("标题和分享者名称至少填写 2 个字符");
       return;
     }
-    const previews = [...extraPreviews, ...prepared.embeddedPreviews].slice(0, 6);
+    if (isDirectPromptSubmission && promptText.trim().length < 10) {
+      setError("提示词内容至少填写 10 个字符");
+      return;
+    }
+    const kind: ShareKind = isDirectPromptSubmission ? "PROMPT" : prepared!.kind;
+    const requiresGeneratedPreview = kind === "PROMPT";
+    if (requiresGeneratedPreview && extraPreviews.length === 0) {
+      setError("提示词分享必须上传 1 张由该提示词生成的效果图");
+      return;
+    }
+    const previews = [
+      ...(requiresGeneratedPreview ? extraPreviews.slice(0, 1) : extraPreviews),
+      ...(requiresGeneratedPreview ? [] : prepared?.embeddedPreviews || []),
+    ].slice(0, 6);
+    const payload = isDirectPromptSubmission
+      ? createPromptPayload(title, promptText)
+      : prepared!.payload;
+    const fileName = isDirectPromptSubmission
+      ? `${title.trim().replace(/\.json$/i, "") || "提示词分享"}.json`
+      : prepared!.fileName;
     setBusy(true);
     setError("");
     setProgress("正在提交审核…");
@@ -301,19 +383,20 @@ export function InspirationSpace() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          kind: prepared.kind,
+          kind,
           title: title.trim(),
           description: description.trim() || null,
           authorName: authorName.trim(),
           tags: [...new Set(tags.split(/[,，\s]+/).map((tag) => tag.trim()).filter(Boolean))].slice(0, 8),
-          fileName: prepared.fileName,
-          payload: prepared.payload,
+          fileName,
+          payload,
           previews,
         }),
       });
       const result = await parseApi<{ message: string }>(response);
       setNotice(result.message);
       setPrepared(null);
+      setPromptText("");
       setExtraPreviews([]);
       setTitle("");
       setDescription("");
@@ -333,27 +416,28 @@ export function InspirationSpace() {
         <div>
           <span>INSPIRATION SPACE</span>
           <h1>把好用的预设，<br /><em>分享给更多创作者。</em></h1>
-          <p>浏览和分享灵感抽屉节点预设与工作流。带图 JSON 会在上传前自动压缩，下载后可直接拖入画布使用。</p>
+          <p>浏览和分享灵感抽屉节点预设、工作流与创作提示词。带图 JSON 会在上传前自动压缩，提示词可以直接复制使用。</p>
           <div className={styles.heroActions}>
-            <button onClick={() => setShowSubmit(true)}>＋ 分享 JSON</button>
-            <small>投稿审核后公开 · 文件保持原生 JSON 格式</small>
+            <button onClick={() => setShowSubmit(true)}>＋ 分享灵感</button>
+            <small>投稿审核后公开 · 支持 JSON、提示词与生成效果图</small>
           </div>
         </div>
         <div className={styles.heroVisual}>
           <article><span>WORKFLOW</span><strong>产品主视觉生成</strong><i>3 张参考图</i></article>
           <article><span>NODE PRESET</span><strong>CMF 质感增强</strong><i>拖入画布即可使用</i></article>
-          <article><span>WORKFLOW</span><strong>角色一致性套图</strong><i>含可替换图片槽位</i></article>
+          <article><span>PROMPT</span><strong>角色一致性提示词</strong><i>一键复制开始创作</i></article>
         </div>
       </section>
 
       <section className={styles.library}>
         <header>
           <div><span>COMMUNITY LIBRARY</span><h2>最新分享</h2><p>{items.length} 个公开资源 · 累计下载 {totalDownloads} 次</p></div>
-          <form onSubmit={(event) => { event.preventDefault(); void loadItems(); }}>
+          <form onSubmit={(event) => { event.preventDefault(); void loadItems(kindFilter, query); }}>
             <select value={kindFilter} onChange={(event) => { const value = event.target.value as "" | ShareKind; setKindFilter(value); void loadItems(value, query); }}>
               <option value="">全部类型</option>
               <option value="WORKFLOW">工作流</option>
               <option value="NODE_PRESET">节点预设</option>
+              <option value="PROMPT">提示词分享</option>
             </select>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、作者或标签" />
             <button>搜索</button>
@@ -382,7 +466,7 @@ export function InspirationSpace() {
                         />
                       )
                     : <div className={styles.emptyCover}><span>JSON</span><small>暂无展示图</small></div>}
-                  <em>{item.kind === "WORKFLOW" ? "工作流" : "节点预设"}</em>
+                  <em>{SHARE_KIND_LABELS[item.kind]}</em>
                   {previewCount > 1 && (
                     <>
                       <b className={styles.previewCount}>{previewIndex + 1} / {previewCount}</b>
@@ -426,6 +510,15 @@ export function InspirationSpace() {
                   <p>{item.description || "作者没有填写额外说明。"}</p>
                   <div className={styles.tags}>{item.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
                   <div className={styles.cardActions}>
+                    {item.kind === "PROMPT" && (
+                      <button
+                        type="button"
+                        className={styles.copyPromptButton}
+                        onClick={() => void copyPrompt(item)}
+                      >
+                        复制提示词
+                      </button>
+                    )}
                     <a
                       className={styles.downloadLink}
                       href={`${apiBaseUrl}/v1/inspiration-space/${item.id}/download`}
@@ -449,31 +542,54 @@ export function InspirationSpace() {
       {showSubmit && (
         <div className={styles.modalBackdrop} onMouseDown={() => !busy && setShowSubmit(false)}>
           <form className={styles.modal} onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
-            <header><div><span>SHARE TO COMMUNITY</span><h2>分享预设或工作流</h2></div><button type="button" onClick={() => !busy && setShowSubmit(false)}>×</button></header>
-            <label className={styles.fileDrop}>
-              <input type="file" accept=".json,application/json" onChange={selectJson} disabled={busy} />
-              <strong>{prepared ? prepared.fileName : "选择灵感抽屉 JSON 文件"}</strong>
-              <small>{prepared
-                ? `${prepared.kind === "WORKFLOW" ? "工作流" : "节点预设"} · ${prepared.imageCount} 张内嵌图 · ${(prepared.compressedBytes / 1024).toFixed(0)} KB`
-                : "支持节点预设、工作流模板和带图工作流实例"}</small>
-            </label>
+            <header><div><span>SHARE TO COMMUNITY</span><h2>分享你的创作灵感</h2></div><button type="button" onClick={() => !busy && setShowSubmit(false)}>×</button></header>
+            <div className={styles.submitModes} aria-label="分享类型">
+              <button type="button" className={submitMode === "JSON" ? styles.activeMode : ""} onClick={() => setSubmitMode("JSON")}>预设 / 工作流</button>
+              <button type="button" className={submitMode === "PROMPT" ? styles.activeMode : ""} onClick={() => setSubmitMode("PROMPT")}>提示词分享</button>
+            </div>
+            {submitMode === "JSON" ? (
+              <label className={styles.fileDrop}>
+                <input type="file" accept=".json,application/json" onChange={selectJson} disabled={busy} />
+                <strong>{prepared ? prepared.fileName : "选择灵感抽屉 JSON 文件"}</strong>
+                <small>{prepared
+                  ? `${SHARE_KIND_LABELS[prepared.kind]} · ${prepared.imageCount} 张内嵌图 · ${(prepared.compressedBytes / 1024).toFixed(0)} KB`
+                  : "支持节点预设、工作流模板、带图工作流实例与提示词 JSON"}</small>
+              </label>
+            ) : (
+              <label className={styles.promptEditor}>
+                <strong>提示词内容</strong>
+                <textarea
+                  value={promptText}
+                  onChange={(event) => setPromptText(event.target.value)}
+                  maxLength={20_000}
+                  rows={8}
+                  placeholder="粘贴完整提示词，保留必要的格式、变量和使用说明…"
+                />
+                <small>{promptText.length.toLocaleString("zh-CN")} / 20,000 字符</small>
+              </label>
+            )}
             <div className={styles.formGrid}>
               <label><strong>标题</strong><input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={80} /></label>
               <label><strong>分享者名称</strong><input value={authorName} onChange={(event) => setAuthorName(event.target.value)} maxLength={32} /></label>
             </div>
-            <label><strong>简介</strong><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} rows={3} placeholder="说明这个预设适合做什么" /></label>
+            <label><strong>简介</strong><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} rows={3} placeholder="说明这份分享适合做什么、如何使用" /></label>
             <label><strong>标签</strong><input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="工业设计, CMF, 产品展示（最多 8 个）" /></label>
             <label className={styles.previewPicker}>
-              <input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={selectPreviews} disabled={busy} />
-              <span><strong>添加展示图</strong><small>最多 6 张，自动压缩为 WebP；没有时会使用 JSON 内嵌图片。</small></span>
+              <input type="file" accept="image/png,image/jpeg,image/webp" multiple={!promptPreviewRequired} onChange={selectPreviews} disabled={busy} />
+              <span>
+                <strong>{promptPreviewRequired ? "上传提示词生成效果图（必填）" : "添加展示图"}</strong>
+                <small>{promptPreviewRequired
+                  ? "必须上传 1 张由这段提示词生成的图片，系统会自动压缩为 WebP。"
+                  : "最多 6 张，自动压缩为 WebP；没有时会使用 JSON 内嵌图片。"}</small>
+              </span>
             </label>
-            {[...extraPreviews, ...(prepared?.embeddedPreviews || [])].length > 0 && (
+            {visibleSubmissionPreviews.length > 0 && (
               <div className={styles.previewStrip}>
-                {[...extraPreviews, ...(prepared?.embeddedPreviews || [])].slice(0, 6).map((preview, index) => <img key={`${preview.dataUrl.slice(-20)}-${index}`} src={preview.dataUrl} alt="" />)}
+                {visibleSubmissionPreviews.map((preview, index) => <img key={`${preview.dataUrl.slice(-20)}-${index}`} src={preview.dataUrl} alt="" />)}
               </div>
             )}
             {(error || notice || progress) && <div className={error ? styles.error : styles.notice}>{error || progress || notice}</div>}
-            <footer><small>所有投稿默认进入待审核，不会立即公开。</small><button disabled={busy || !prepared}>{busy ? progress || "处理中…" : "提交审核"}</button></footer>
+            <footer><small>所有投稿默认进入待审核，不会立即公开。</small><button disabled={busy || (submitMode === "JSON" ? !prepared || promptPreviewRequired && extraPreviews.length === 0 : promptText.trim().length < 10 || extraPreviews.length === 0)}>{busy ? progress || "处理中…" : "提交审核"}</button></footer>
           </form>
         </div>
       )}

@@ -104,10 +104,10 @@ export default function Home() {
         <div className="workflow-library-heading">
           <div>
             <span>READY-TO-USE AI WORKFLOWS</span>
-            <h2 id="workflow-library-title">不止工业设计，<br />高频出图任务也能一键完成。</h2>
+            <h2 id="workflow-library-title">工作流、预设和提示词，<br />找到灵感就能直接使用。</h2>
           </div>
           <div>
-            <p>把重复的提示词、参考图和节点连接保存成工作流。选择模板、替换素材，然后让画布自动完成整套生成过程。</p>
+            <p>浏览社区分享的工作流、节点预设与创作提示词；提示词会附带真实生成效果图，选中后即可开始创作。</p>
             <a href="/space">浏览灵感空间 <span>→</span></a>
           </div>
         </div>
