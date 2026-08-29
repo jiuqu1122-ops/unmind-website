@@ -12,6 +12,7 @@ type InspirationShare = {
   kind: ShareKind;
   title: string;
   description: string | null;
+  prompt?: string | null;
   authorName: string;
   tags: string[];
   fileName: string;
@@ -264,12 +265,15 @@ export function InspirationSpace() {
     setError("");
     setNotice("");
     try {
-      const response = await fetch(`${apiBaseUrl}/v1/inspiration-space/${item.id}/download`);
-      const payload = await parseApi<unknown>(response);
-      const prompt = extractSharedPrompt(payload);
-      if (!prompt) throw new Error("这个分享里没有可复制的提示词内容");
+      let prompt = item.prompt?.trim() || "";
+      if (!prompt) {
+        const response = await fetch(`${apiBaseUrl}/v1/inspiration-space/${item.id}/download`);
+        const payload = await parseApi<unknown>(response);
+        prompt = extractSharedPrompt(payload);
+        if (!prompt) throw new Error("这个分享里没有可复制的提示词内容");
+        recordDownload(item.id);
+      }
       await navigator.clipboard.writeText(prompt);
-      recordDownload(item.id);
       setNotice(`已复制「${item.title}」的提示词`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "提示词复制失败");
@@ -507,7 +511,14 @@ export function InspirationSpace() {
                 <div className={styles.cardBody}>
                   <small>{item.authorName} · {new Date(item.createdAt).toLocaleDateString("zh-CN")}</small>
                   <h3>{item.title}</h3>
-                  <p>{item.description || "作者没有填写额外说明。"}</p>
+                  {item.kind === "PROMPT" && item.prompt ? (
+                    <div className={styles.promptPreview}>
+                      <span>实际提示词</span>
+                      <p>{item.prompt}</p>
+                    </div>
+                  ) : (
+                    <p>{item.description || "作者没有填写额外说明。"}</p>
+                  )}
                   <div className={styles.tags}>{item.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
                   <div className={styles.cardActions}>
                     {item.kind === "PROMPT" && (
@@ -519,16 +530,18 @@ export function InspirationSpace() {
                         复制提示词
                       </button>
                     )}
-                    <a
-                      className={styles.downloadLink}
-                      href={`${apiBaseUrl}/v1/inspiration-space/${item.id}/download`}
-                      onClick={() => recordDownload(item.id)}
-                    >
-                      下载 JSON
-                      <span className={styles.downloadBadge} title={`已下载 ${item.downloadCount} 次`}>
-                        {item.downloadCount}
-                      </span>
-                    </a>
+                    {item.kind !== "PROMPT" && (
+                      <a
+                        className={styles.downloadLink}
+                        href={`${apiBaseUrl}/v1/inspiration-space/${item.id}/download`}
+                        onClick={() => recordDownload(item.id)}
+                      >
+                        下载 JSON
+                        <span className={styles.downloadBadge} title={`已下载 ${item.downloadCount} 次`}>
+                          {item.downloadCount}
+                        </span>
+                      </a>
+                    )}
                   </div>
                 </div>
               </article>

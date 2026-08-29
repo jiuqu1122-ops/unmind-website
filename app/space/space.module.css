@@ -49,6 +49,9 @@
 .cardBody > small { color: #8a96aa; font-size: 9px; font-weight: 750; }
 .cardBody h3 { min-height: 46px; margin: 7px 0; display: -webkit-box; overflow: hidden; font-size: 19px; line-height: 1.22; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .cardBody p { height: 43px; margin: 0; overflow: hidden; color: #758197; font-size: 11px; line-height: 1.8; }
+.promptPreview { min-height: 88px; padding: 10px 11px; display: grid; gap: 6px; border: 1px solid #dce5f3; border-radius: 13px; background: #f6f9ff; }
+.promptPreview > span { color: #315f9f; font-size: 9px; font-weight: 900; }
+.promptPreview > p { height: auto; max-height: 110px; overflow: auto; color: #44536b; font-size: 10px; line-height: 1.65; white-space: pre-wrap; }
 .tags { min-height: 28px; margin-top: 13px; display: flex; flex-wrap: wrap; gap: 5px; }
 .tags span { padding: 4px 7px; border-radius: 99px; background: #edf3ff; color: #4c6c9f; font-size: 8px; }
 .cardActions { margin-top: auto; padding-top: 13px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #edf0f5; }
