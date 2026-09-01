@@ -73,7 +73,7 @@
 .compactForm input,.compactForm select,.providerForm input,.providerForm select,.providerForm textarea,.basePricingGrid input,.imagePricingList input,.videoPricingList input { width: 100%; min-width: 0; min-height: 40px; padding: 0 11px; border: 1px solid #d9e1ee; border-radius: 10px; outline: none; background: #f9fbff; color: #172033; font: inherit; }
 .providerForm textarea,.videoPricingList input:not([type="number"]) { padding-top: 10px; padding-bottom: 10px; }
 .compactForm input:focus,.compactForm select:focus,.providerForm input:focus,.providerForm select:focus,.providerForm textarea:focus,.basePricingGrid input:focus,.imagePricingList input:focus,.videoPricingList input:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
-.compactForm button,.providerForm > button,.pricingShell > .saveBar button { min-height: 40px; justify-self: start; padding: 0 16px; border: 0; border-radius: 10px; background: #2868ed; color: white; font-weight: 850; cursor: pointer; }
+.compactForm button,.providerForm > button,.saveBar button,.chatPricingSave button { min-height: 40px; justify-self: start; padding: 0 16px; border: 0; border-radius: 10px; background: #2868ed; color: white; font-weight: 850; cursor: pointer; }
 .sectionTitle { color: #172033; font-size: 13px; font-weight: 900; }
 .formGridThree { display: grid; grid-template-columns: 1.2fr 1fr .8fr; gap: 10px; }
 .ledgerList { max-height: 250px; margin-top: 10px; display: grid; gap: 6px; overflow: auto; }
@@ -114,6 +114,21 @@
 .actionRow .ghost { border: 1px solid #dbe3f0; background: white; color: #5f6d84; }
 .actionRow .danger { border: 1px solid #f5caca; background: #fff5f5; color: #d64646; }
 .pricingShell { margin-top: 16px; display: grid; gap: 14px; }
+.pricingShell .panel { min-height: 0; }
+.pricingForm { display: grid; gap: 14px; }
+.pricingFormula { margin: 12px 0 0; color: #71809a; font-size: 10px; line-height: 1.7; }
+.chatPricingHeader,.chatPricingRow { display: grid; grid-template-columns: minmax(150px,1.1fr) minmax(125px,.8fr) repeat(4,minmax(100px,.72fr)); gap: 9px; align-items: end; }
+.chatPricingHeader { margin-top: 16px; padding: 0 11px 8px; border-bottom: 1px solid #e3e8f1; color: #8591a5; font-size: 9px; font-weight: 800; }
+.chatPricingList { display: grid; }
+.chatPricingRow { padding: 10px 11px; border-bottom: 1px solid #edf0f5; }
+.chatPricingRow > strong { align-self: center; color: #26344b; font-size: 11px; }
+.chatPricingRow label { display: grid; gap: 6px; min-width: 0; color: #7b8799; font-size: 9px; }
+.chatPricingRow input { width: 100%; min-width: 0; min-height: 38px; padding: 0 10px; border: 1px solid #d9e1ee; border-radius: 9px; outline: none; background: #f9fbff; color: #172033; font: inherit; }
+.chatPricingRow input:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
+.contextLabel { align-self: center; color: #617089; font-size: 10px; }
+.requestChatPrice { grid-column: 3 / -1; max-width: 180px; }
+.chatPricingSave { padding-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #71809a; font-size: 10px; }
+.chatPricingSave button:disabled { cursor: wait; opacity: .55; }
 .basePricingGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; }
 .imagePricingList { margin-top: 13px; display: grid; gap: 8px; }
 .imagePricingList article { padding: 11px; display: grid; grid-template-columns: minmax(150px,1fr) repeat(3, minmax(70px, .4fr)); align-items: end; gap: 9px; border-bottom: 1px solid #edf0f5; }
@@ -137,6 +152,10 @@
   .providerShell { grid-template-columns: 1fr; }
   .reviewGrid { grid-template-columns: repeat(2,1fr); }
   .basePricingGrid { grid-template-columns: repeat(2,1fr); }
+  .chatPricingHeader { display: none; }
+  .chatPricingRow { grid-template-columns: repeat(2,1fr); padding: 14px 0; }
+  .chatPricingRow > strong { grid-column: 1 / -1; }
+  .requestChatPrice { grid-column: 1 / -1; }
 }
 @media (max-width: 640px) {
   .console { width: calc(100% - 28px); padding-top: 32px; }
@@ -152,6 +171,10 @@
   .imagePricingList article { grid-template-columns: 1fr 1fr; }
   .imagePricingList article > strong { grid-column: 1 / -1; padding-bottom: 0; }
   .videoPriceHead { grid-template-columns: 1fr; }
+  .chatPricingRow { grid-template-columns: 1fr; }
+  .chatPricingRow > strong,.requestChatPrice { grid-column: auto; }
+  .chatPricingSave { align-items: stretch; flex-direction: column; }
+  .chatPricingSave button { width: 100%; }
   .materialPricingTitle { align-items: flex-start; flex-direction: column; gap: 3px; }
   .saveBar { align-items: stretch; flex-direction: column; }
   .saveBar button { width: 100%; }

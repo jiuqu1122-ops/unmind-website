@@ -13,6 +13,8 @@ import {
   providerToDraft,
   videoPricingDraft,
   type AdminAiPricing,
+  type AdminChatPricing,
+  type AdminChatTokenRates,
   type AdminLedgerEntry,
   type AdminOverview,
   type AdminProvider,
@@ -32,11 +34,15 @@ type Tab = "users" | "codes" | "providers" | "pricing" | "reviews";
 type AuthorizationStatus = "ACTIVE" | "SUSPENDED" | "DISABLED";
 
 const formatCredits = (value?: string | null) => {
-  try {
-    return BigInt(value || "0").toLocaleString("zh-CN");
-  } catch {
-    return value || "0";
-  }
+  const normalized = value?.trim() || "0";
+  const match = normalized.match(/^([+-]?)(\d+)(?:\.(\d+))?$/);
+  if (!match) return normalized;
+  const negative = match[1] === "-";
+  const fraction = (match[3] || "").padEnd(3, "0");
+  let hundredths = BigInt(match[2] || "0") * 100n + BigInt(fraction.slice(0, 2));
+  if (Number(fraction[2]) >= 5) hundredths += 1n;
+  const sign = negative && hundredths !== 0n ? "-" : "";
+  return `${sign}${(hundredths / 100n).toLocaleString("zh-CN")}.${(hundredths % 100n).toString().padStart(2, "0")}`;
 };
 
 const formatDateTime = (value?: string | null) => (
@@ -74,6 +80,7 @@ export function AdminConsole() {
   );
   const [providerBalance, setProviderBalance] = useState<ProviderBalance | null>(null);
   const [pricing, setPricing] = useState<AdminAiPricing | null>(null);
+  const [chatPricing, setChatPricing] = useState<AdminChatPricing | null>(null);
   const [videoAdvanced, setVideoAdvanced] = useState<Record<number, VideoPricingDraft>>({});
   const [tab, setTab] = useState<Tab>("users");
   const [query, setQuery] = useState("");
@@ -121,13 +128,14 @@ export function AdminConsole() {
 
   const refreshDashboard = useCallback(async (credential: string, search = "") => {
     const queryString = search ? `?query=${encodeURIComponent(search)}&limit=80` : "?limit=80";
-    const [nextOverview, userPage, codePage, sharePage, providerPage, nextPricing] = await Promise.all([
+    const [nextOverview, userPage, codePage, sharePage, providerPage, nextPricing, nextChatPricing] = await Promise.all([
       request<AdminOverview>("/v1/admin/overview", {}, credential),
       request<{ items: AdminUser[] }>(`/v1/admin/users${queryString}`, {}, credential),
       request<{ items: RedemptionCode[] }>("/v1/admin/redemption-codes?limit=200", {}, credential),
       request<{ items: ReviewShare[] }>("/v1/admin/inspiration-space?limit=200", {}, credential),
       request<{ items: AdminProvider[] }>("/v1/admin/providers", {}, credential),
       request<AdminAiPricing>("/v1/admin/pricing", {}, credential),
+      request<AdminChatPricing>("/v1/admin/chat-pricing", {}, credential),
     ]);
     setOverview(nextOverview);
     setUsers(userPage.items);
@@ -136,6 +144,7 @@ export function AdminConsole() {
     setProviders(providerPage.items);
     setProviderDraft(providerPage.items[0] ? providerToDraft(providerPage.items[0]) : newProviderDraft());
     applyPricing(nextPricing);
+    setChatPricing(nextChatPricing);
   }, [request]);
 
   const refreshUsers = async (search = query) => {
@@ -198,6 +207,7 @@ export function AdminConsole() {
     setReviews([]);
     setProviders([]);
     setPricing(null);
+    setChatPricing(null);
     setProviderDraft(newProviderDraft());
     setProviderBalance(null);
     clearMessage();
@@ -477,6 +487,80 @@ export function AdminConsole() {
       ...current,
       imageModels: current.imageModels.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item),
     } : current);
+  };
+
+  const updateChatTokenRate = (
+    index: number,
+    tier: "standard" | "extended",
+    field: keyof AdminChatTokenRates,
+    value: string,
+  ) => {
+    setChatPricing((current) => current ? {
+      ...current,
+      models: current.models.map((item, itemIndex) => (
+        itemIndex === index && item.billingMode === "token"
+          ? { ...item, [tier]: { ...item[tier], [field]: value } }
+          : item
+      )),
+    } : current);
+  };
+
+  const updateChatThreshold = (index: number, value: string) => {
+    setChatPricing((current) => current ? {
+      ...current,
+      models: current.models.map((item, itemIndex) => (
+        itemIndex === index && item.billingMode === "token"
+          ? { ...item, contextThresholdTokens: Number(value) }
+          : item
+      )),
+    } : current);
+  };
+
+  const updateChatRequestPrice = (index: number, value: string) => {
+    setChatPricing((current) => current ? {
+      ...current,
+      models: current.models.map((item, itemIndex) => (
+        itemIndex === index && item.billingMode === "request"
+          ? { ...item, creditsPerRequest: value }
+          : item
+      )),
+    } : current);
+  };
+
+  const saveChatPricing = async () => {
+    if (!chatPricing) return;
+    const values = chatPricing.models.flatMap((item) => item.billingMode === "request"
+      ? [item.creditsPerRequest]
+      : [
+        ...Object.values(item.standard),
+        ...Object.values(item.extended),
+      ]);
+    if (values.some((value) => !creditPattern.test(value))) {
+      setError("Chat Token 单价必须是 0 到 1000000 的整数");
+      return;
+    }
+    if (chatPricing.models.some((item) => item.billingMode === "token" && (
+      !Number.isSafeInteger(item.contextThresholdTokens)
+      || item.contextThresholdTokens < 1
+      || item.contextThresholdTokens > 10_000_000
+    ))) {
+      setError("上下文分档必须是 1 到 10000000 的整数 Token");
+      return;
+    }
+    setBusy(true);
+    clearMessage();
+    try {
+      const result = await request<AdminChatPricing>("/v1/admin/chat-pricing", {
+        method: "PATCH",
+        body: JSON.stringify({ models: chatPricing.models }),
+      });
+      setChatPricing(result);
+      setNotice("Chat Token 定价已保存并立即生效");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "保存 Chat Token 定价失败");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const updateVideoPrice = (index: number, value: string) => {
@@ -808,8 +892,52 @@ export function AdminConsole() {
         </div>
       )}
 
-      {tab === "pricing" && pricing && (
-        <form className={styles.pricingShell} onSubmit={savePricing}>
+      {tab === "pricing" && pricing && chatPricing && (
+        <div className={styles.pricingShell}>
+          <section className={styles.panel}>
+            <div className={styles.panelTitle}><strong>Chat Token 定价</strong><span>Token 模型按 1M 计费，Luna 按次计费</span></div>
+            <p className={styles.pricingFormula}>正常输入 Token = 输入 Token − 缓存读取 Token；总价按正常输入、缓存读取、输出和缓存写入分别计价后合计。</p>
+            <div className={styles.chatPricingHeader} aria-hidden="true">
+              <span>模型</span><span>上下文</span><span>输入 /1M</span><span>输出 /1M</span><span>缓存读取 /1M</span><span>缓存写入 /1M</span>
+            </div>
+            <div className={styles.chatPricingList}>
+              {chatPricing.models.flatMap((item, index) => {
+                if (item.billingMode === "request") {
+                  return [(
+                    <article className={styles.chatPricingRow} key={item.model}>
+                      <strong>{item.model}</strong>
+                      <span className={styles.contextLabel}>按次</span>
+                      <label className={styles.requestChatPrice}><span>每次积分</span><input type="number" min={0} max={1000000} value={item.creditsPerRequest} onChange={(event) => updateChatRequestPrice(index, event.target.value)} /></label>
+                    </article>
+                  )];
+                }
+                return (["standard", "extended"] as const).map((tier) => {
+                  const rates = item[tier];
+                  return (
+                    <article className={styles.chatPricingRow} key={`${item.model}-${tier}`}>
+                      <strong>{item.model}</strong>
+                      {tier === "standard"
+                        ? <label className={styles.contextInput}><span>≤ Token</span><input type="number" min={1} max={10000000} value={item.contextThresholdTokens} onChange={(event) => updateChatThreshold(index, event.target.value)} /></label>
+                        : <span className={styles.contextLabel}>&gt; {item.contextThresholdTokens.toLocaleString("zh-CN")}</span>}
+                      {([
+                        ["inputCreditsPerMillion", "输入 /1M"],
+                        ["outputCreditsPerMillion", "输出 /1M"],
+                        ["cachedInputCreditsPerMillion", "缓存读取 /1M"],
+                        ["cacheWriteCreditsPerMillion", "缓存写入 /1M"],
+                      ] as const).map(([field, label]) => (
+                        <label key={field}><span>{label}</span><input type="number" min={0} max={1000000} value={rates[field]} onChange={(event) => updateChatTokenRate(index, tier, field, event.target.value)} /></label>
+                      ))}
+                    </article>
+                  );
+                });
+              })}
+            </div>
+            <div className={styles.chatPricingSave}>
+              <span>{chatPricing.updatedAt ? `最近保存：${formatDateTime(chatPricing.updatedAt)}` : "当前使用初始定价"}</span>
+              <button type="button" disabled={busy} onClick={() => void saveChatPricing()}>保存 Chat 计价</button>
+            </div>
+          </section>
+          <form className={styles.pricingForm} onSubmit={savePricing}>
           <section className={styles.panel}>
             <div className={styles.panelTitle}><strong>基础定价</strong><span>积分</span></div>
             <div className={styles.basePricingGrid}>
@@ -860,7 +988,8 @@ export function AdminConsole() {
             </div>
           </section>
           <div className={styles.saveBar}><span>{pricing.updatedAt ? `最近保存：${formatDateTime(pricing.updatedAt)}` : "尚未保存自定义定价"}</span><button disabled={busy}>保存并立即生效</button></div>
-        </form>
+          </form>
+        </div>
       )}
 
       {tab === "reviews" && (

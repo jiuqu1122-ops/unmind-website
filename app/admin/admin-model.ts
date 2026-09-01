@@ -155,6 +155,34 @@ export type AdminAiPricing = {
   updatedAt: string | null;
 };
 
+export type AdminChatTokenRates = {
+  inputCreditsPerMillion: string;
+  outputCreditsPerMillion: string;
+  cachedInputCreditsPerMillion: string;
+  cacheWriteCreditsPerMillion: string;
+};
+
+export type AdminChatTokenModelPrice = {
+  model: string;
+  billingMode: "token";
+  contextThresholdTokens: number;
+  standard: AdminChatTokenRates;
+  extended: AdminChatTokenRates;
+};
+
+export type AdminChatRequestModelPrice = {
+  model: string;
+  billingMode: "request";
+  creditsPerRequest: string;
+};
+
+export type AdminChatModelPrice = AdminChatTokenModelPrice | AdminChatRequestModelPrice;
+
+export type AdminChatPricing = {
+  models: AdminChatModelPrice[];
+  updatedAt: string | null;
+};
+
 export type ProviderDraft = {
   id: string | null;
   kind: AdminProviderKind;
