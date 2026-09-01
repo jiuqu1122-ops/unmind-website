@@ -42,7 +42,21 @@ const formatCredits = (value?: string | null) => {
   let hundredths = BigInt(match[2] || "0") * 100n + BigInt(fraction.slice(0, 2));
   if (Number(fraction[2]) >= 5) hundredths += 1n;
   const sign = negative && hundredths !== 0n ? "-" : "";
-  return `${sign}${(hundredths / 100n).toLocaleString("zh-CN")}.${(hundredths % 100n).toString().padStart(2, "0")}`;
+  const whole = hundredths / 100n;
+  const cents = (hundredths % 100n).toString().padStart(2, "0");
+  return `${sign}${whole.toLocaleString("zh-CN")}.${cents}`;
+};
+
+const ledgerPresentation = (entry: AdminLedgerEntry) => {
+  const text = entry.description?.trim() || entry.type;
+  const segments = text.split(/\s*·\s*/).filter(Boolean);
+  if (segments[0] !== "Chat Token 结算" || segments.length < 2) {
+    return { title: text, details: [] as string[] };
+  }
+  return {
+    title: segments[0],
+    details: segments.slice(2),
+  };
 };
 
 const formatDateTime = (value?: string | null) => (
@@ -696,8 +710,6 @@ export function AdminConsole() {
     }
   };
 
-  const ledgerLabel = (entry: AdminLedgerEntry) => entry.description || entry.type;
-
   if (!adminKey) {
     return (
       <section className={styles.loginShell}>
@@ -787,12 +799,23 @@ export function AdminConsole() {
                 <div>
                   <div className={styles.panelTitle}><strong>额度流水</strong><span>{selectedUser.ledger.length} 条</span></div>
                   <div className={styles.ledgerList}>
-                    {selectedUser.ledger.map((entry) => (
-                      <article key={entry.id}>
-                        <span><strong>{ledgerLabel(entry)}</strong><small>{formatDateTime(entry.createdAt)} · 余额 {formatCredits(entry.balanceAfter)}</small></span>
-                        <em data-negative={entry.amount.startsWith("-")}>{entry.amount.startsWith("-") ? "" : "+"}{formatCredits(entry.amount)}</em>
-                      </article>
-                    ))}
+                    {selectedUser.ledger.map((entry) => {
+                      const presentation = ledgerPresentation(entry);
+                      return (
+                        <article key={entry.id}>
+                          <span>
+                            <strong>{presentation.title}</strong>
+                            {presentation.details.length > 0 && (
+                              <span className={styles.ledgerDetails}>
+                                {presentation.details.map((detail) => <span key={detail}>{detail}</span>)}
+                              </span>
+                            )}
+                            <small>{formatDateTime(entry.createdAt)} · 余额 {formatCredits(entry.balanceAfter)}</small>
+                          </span>
+                          <em data-negative={entry.amount.startsWith("-")}>{entry.amount.startsWith("-") ? "" : "+"}{formatCredits(entry.amount)}</em>
+                        </article>
+                      );
+                    })}
                     {!selectedUser.ledger.length && <p className={styles.empty}>暂无流水</p>}
                   </div>
                 </div>

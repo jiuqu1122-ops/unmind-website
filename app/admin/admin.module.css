@@ -24,7 +24,7 @@
 .error,.notice { margin-top: 14px; padding: 13px 16px; border-radius: 12px; font-size: 12px; }
 .error { border: 1px solid #ffc8c8; background: #fff1f1; color: #c92f2f; }
 .notice { border: 1px solid #bfe9d8; background: #effbf6; color: #16835f; }
-.twoColumns { margin-top: 16px; display: grid; grid-template-columns: minmax(420px,1.05fr) minmax(360px,.95fr); gap: 14px; }
+.twoColumns { margin-top: 16px; display: grid; grid-template-columns: minmax(340px,.78fr) minmax(600px,1.22fr); gap: 14px; }
 .panel { min-height: 500px; padding: 18px; border: 1px solid #e0e6f0; border-radius: 20px; background: white; }
 .toolbar { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .toolbar button { border: 0; border-radius: 11px; background: #1f3150; color: white; font-weight: 800; }
@@ -34,7 +34,7 @@
 .userList span,.codeList article > span { min-width: 0; display: grid; gap: 4px; }
 .userList strong,.codeList strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .userList small,.codeList small { overflow: hidden; color: #8894a7; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.userList em,.codeList em { color: #2768ee; font-size: 11px; font-style: normal; font-weight: 900; white-space: nowrap; }
+.userList em,.codeList em { color: #2768ee; font-size: 11px; font-style: normal; font-weight: 900; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .form { max-width: 520px; margin: 8px auto; display: grid; gap: 16px; }
 .form h2 { margin: -8px 0 4px; font-size: 22px; }
 .balance { padding: 20px; display: flex; align-items: flex-end; justify-content: space-between; border-radius: 16px; background: #132543; color: white; }
@@ -63,11 +63,12 @@
 .reviewBody footer button { min-height: 36px; padding: 0 9px; font-size: 10px; }
 .empty { margin: auto; padding: 60px 20px; color: #8a96a9; text-align: center; }
 .userDetailPanel { min-height: 500px; }
-.detailStack { display: grid; gap: 18px; }
-.walletGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.walletGrid article { padding: 14px; display: grid; gap: 7px; border: 1px solid #e0e6f0; border-radius: 12px; background: #f9fbff; }
+.detailStack { display: grid; gap: 16px; }
+.walletGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+.walletGrid article { min-width: 0; padding: 14px; display: grid; gap: 7px; border: 1px solid #e4e8ef; border-radius: 12px; background: #f8fafc; }
+.walletGrid article:first-child { border-color: #cfdcf7; background: #f2f6ff; }
 .walletGrid small { color: #8190a7; font-size: 10px; }
-.walletGrid strong { color: #1d4fae; font-size: 18px; }
+.walletGrid strong { overflow: hidden; color: #1d4fae; font-size: 17px; letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .compactForm { padding-top: 16px; display: grid; gap: 12px; border-top: 1px solid #edf0f5; }
 .compactForm label,.providerForm label,.basePricingGrid label,.imagePricingList label,.videoPricingList label { display: grid; gap: 7px; color: #4e5b70; font-size: 11px; }
 .compactForm input,.compactForm select,.providerForm input,.providerForm select,.providerForm textarea,.basePricingGrid input,.imagePricingList input,.videoPricingList input { width: 100%; min-width: 0; min-height: 40px; padding: 0 11px; border: 1px solid #d9e1ee; border-radius: 10px; outline: none; background: #f9fbff; color: #172033; font: inherit; }
@@ -76,12 +77,14 @@
 .compactForm button,.providerForm > button,.saveBar button,.chatPricingSave button { min-height: 40px; justify-self: start; padding: 0 16px; border: 0; border-radius: 10px; background: #2868ed; color: white; font-weight: 850; cursor: pointer; }
 .sectionTitle { color: #172033; font-size: 13px; font-weight: 900; }
 .formGridThree { display: grid; grid-template-columns: 1.2fr 1fr .8fr; gap: 10px; }
-.ledgerList { max-height: 250px; margin-top: 10px; display: grid; gap: 6px; overflow: auto; }
-.ledgerList article { padding: 10px 0; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #edf0f5; }
+.ledgerList { max-height: 290px; margin-top: 10px; display: grid; overflow: auto; scrollbar-width: thin; }
+.ledgerList article { padding: 11px 2px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; gap: 14px; border-bottom: 1px solid #edf0f5; }
 .ledgerList article > span { min-width: 0; display: grid; gap: 4px; }
-.ledgerList strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-.ledgerList small { color: #8894a7; font-size: 9px; }
-.ledgerList em { color: #16835f; font-size: 11px; font-style: normal; font-weight: 900; white-space: nowrap; }
+.ledgerList strong { font-size: 11px; line-height: 1.45; }
+.ledgerDetails { display: flex!important; flex-wrap: wrap; gap: 2px 12px!important; color: #637089; font-size: 9px; line-height: 1.5; }
+.ledgerDetails span { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ledgerList small { color: #8894a7; font-size: 9px; font-variant-numeric: tabular-nums; }
+.ledgerList em { color: #16835f; font-size: 11px; font-style: normal; font-weight: 900; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ledgerList em[data-negative="true"] { color: #c92f2f; }
 .providerShell { margin-top: 16px; display: grid; grid-template-columns: minmax(300px,.78fr) minmax(500px,1.22fr); gap: 14px; }
 .providerCreateBar { display: flex; flex-wrap: wrap; gap: 7px; padding-bottom: 14px; border-bottom: 1px solid #edf0f5; }
@@ -122,10 +125,10 @@
 .chatPricingList { display: grid; }
 .chatPricingRow { padding: 10px 11px; border-bottom: 1px solid #edf0f5; }
 .chatPricingRow > strong { align-self: center; color: #26344b; font-size: 11px; }
-.chatPricingRow label { display: grid; gap: 6px; min-width: 0; color: #7b8799; font-size: 9px; }
-.chatPricingRow input { width: 100%; min-width: 0; min-height: 38px; padding: 0 10px; border: 1px solid #d9e1ee; border-radius: 9px; outline: none; background: #f9fbff; color: #172033; font: inherit; }
+.chatPricingRow label { min-width: 0; display: grid; gap: 6px; color: #7b8799; font-size: 9px; }
+.chatPricingRow input { width: 100%; min-width: 0; min-height: 38px; padding: 0 10px; border: 1px solid #d9e1ee; border-radius: 9px; outline: none; background: #f9fbff; color: #172033; font: inherit; font-variant-numeric: tabular-nums; }
 .chatPricingRow input:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
-.contextLabel { align-self: center; color: #617089; font-size: 10px; }
+.contextLabel { align-self: center; color: #617089; font-size: 10px; font-variant-numeric: tabular-nums; }
 .requestChatPrice { grid-column: 3 / -1; max-width: 180px; }
 .chatPricingSave { padding-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #71809a; font-size: 10px; }
 .chatPricingSave button:disabled { cursor: wait; opacity: .55; }
