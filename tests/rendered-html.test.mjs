@@ -41,7 +41,7 @@ test("renders the finished Inspiration Drawer landing page", async () => {
   assert.match(html, /id="tutorial"/);
   assert.match(html, /inspiration-drawer-tutorial\.mp4/);
   assert.match(html, /04:42/);
-  assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v6\.0\.24\/Inspiration\.Drawer_6\.0\.24_x64-setup\.exe/);
+  assert.match(html, /inspirationdrawer-1475663212\.cos\.ap-singapore\.myqcloud\.com\/downloads\/windows\/releases\/v6\.0\.24\/Inspiration\.Drawer_6\.0\.24_x64-setup\.exe/);
   assert.match(html, /inspirationdrawer-1475663212\.cos\.ap-singapore\.myqcloud\.com\/downloads\/macos\/preview\/Inspiration-Drawer-macOS-Preview\.zip/);
   assert.match(html, /api\.unmind\.art\/v1\/mobile\/apk/);
   assert.doesNotMatch(html, /暂未上线/);
@@ -63,7 +63,7 @@ test("renders the product feature pages", async () => {
   assert.match(pin, /2 个窗口已置顶/);
 
   for (const html of [materials, notes, pin]) {
-    assert.match(html, /github\.com\/jiuqu1122-ops\/inspiration-drawer\/releases\/download\/v6\.0\.24\/Inspiration\.Drawer_6\.0\.24_x64-setup\.exe/);
+    assert.match(html, /inspirationdrawer-1475663212\.cos\.ap-singapore\.myqcloud\.com\/downloads\/windows\/releases\/v6\.0\.24\/Inspiration\.Drawer_6\.0\.24_x64-setup\.exe/);
     assert.match(html, /inspirationdrawer-1475663212\.cos\.ap-singapore\.myqcloud\.com\/downloads\/macos\/preview\/Inspiration-Drawer-macOS-Preview\.zip/);
   }
 });

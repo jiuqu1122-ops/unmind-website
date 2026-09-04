@@ -6,7 +6,7 @@ export const apiBaseUrl = (
 
 export const downloadUrl =
   process.env.NEXT_PUBLIC_DOWNLOAD_URL
-  || "https://github.com/jiuqu1122-ops/inspiration-drawer/releases/download/v6.0.24/Inspiration.Drawer_6.0.24_x64-setup.exe";
+  || "https://inspirationdrawer-1475663212.cos.ap-singapore.myqcloud.com/downloads/windows/releases/v6.0.24/Inspiration.Drawer_6.0.24_x64-setup.exe";
 
 export const macosDownloadUrl =
   process.env.NEXT_PUBLIC_MACOS_DOWNLOAD_URL
