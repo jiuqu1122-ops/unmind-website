@@ -25,8 +25,10 @@ body {
 }
 button, a { font: inherit; }
 a { color: inherit; text-decoration: none; }
-main { min-height: 100vh; overflow: hidden; }
+main { min-height: 100dvh; overflow: hidden; }
 h1, h2, h3, p { margin-top: 0; }
+h1, h2 { text-wrap: balance; }
+p { text-wrap: pretty; }
 
 .site-header {
   width: min(1260px, calc(100% - 48px));
@@ -62,6 +64,11 @@ nav a:hover { color: var(--blue-deep); }
 nav a:hover::after { transform: scaleX(1); }
 nav a.current { color: var(--blue-deep); }
 nav a.current::after { transform: scaleX(1); }
+nav a:last-child { padding: 10px 15px; border-radius: 11px; background: var(--ink); color: #fff; box-shadow: 0 8px 20px rgba(17, 24, 39, .15); transition: background .18s ease, box-shadow .18s ease, transform .18s ease; }
+nav a:last-child::after { display: none; }
+nav a:last-child:hover { background: var(--blue-deep); color: #fff; box-shadow: 0 11px 24px rgba(35, 87, 220, .22); transform: translateY(-1px); }
+nav a:last-child:active { transform: translateY(0) scale(.98); }
+nav a:focus-visible { outline: 3px solid rgba(47, 114, 255, .24); outline-offset: 4px; }
 .mobile-menu { display: none; }
 
 .hero {
@@ -84,47 +91,48 @@ nav a.current::after { transform: scaleX(1); }
 .privacy-pills span { padding: 8px 11px; border: 1px solid #d7e3fb; border-radius: 999px; background: rgba(255,255,255,.78); color: #4d6081; font-size: 10px; font-weight: 800; }
 .privacy-pills i { margin-right: 4px; color: var(--green); font-style: normal; }
 .hero-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
-.hero-download-buttons, .download-platform-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.hero-download-buttons { width: min(100%, 510px); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.hero-download-buttons .platform-android { min-height: 56px; grid-column: 1 / -1; }
+.hero-download-buttons .platform-android .download-button-copy { display: flex; align-items: baseline; gap: 9px; }
 
 .download-button {
-  min-width: 270px;
-  min-height: 70px;
-  padding: 0 26px;
+  width: 100%;
+  min-width: 0;
+  min-height: 76px;
+  padding: 12px 14px;
   display: grid;
-  grid-template-columns: 42px 1fr;
-  grid-template-rows: 1fr 1fr;
+  grid-template-columns: 36px minmax(0, 1fr) 18px;
   align-items: center;
-  border: 0;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #347cff, #2459df);
-  box-shadow: 0 17px 38px rgba(42, 99, 229, .28);
-  color: white;
+  gap: 11px;
+  border: 1px solid rgba(37, 86, 176, .14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 12px 28px rgba(28, 57, 108, .11);
+  color: #1c3155;
   cursor: pointer;
   text-align: left;
-  transition: transform .18s ease, box-shadow .18s ease;
+  transition: border-color .2s ease, background .2s ease, color .2s ease, transform .2s ease, box-shadow .2s ease;
 }
-.download-button:hover:not(:disabled) { box-shadow: 0 22px 44px rgba(42, 99, 229, .36); transform: translateY(-2px); }
-.download-button.android { background: linear-gradient(135deg, #0d8d79, #056c61); box-shadow: 0 18px 38px rgba(5, 108, 97, .28); }
-.download-button.android:hover:not(:disabled) { box-shadow: 0 22px 44px rgba(5, 108, 97, .34); }
+.download-button:hover { border-color: rgba(47, 114, 255, .34); box-shadow: 0 18px 36px rgba(28, 57, 108, .16); transform: translateY(-2px); }
+.download-button:active { transform: translateY(0) scale(.985); }
+.download-button.platform-windows { border-color: transparent; background: #2f6fe9; box-shadow: 0 15px 34px rgba(36, 88, 205, .25); color: #fff; }
+.download-button.platform-windows:hover { background: #255fd2; box-shadow: 0 20px 40px rgba(36, 88, 205, .31); }
+.download-button.platform-macos { border-color: transparent; background: #17243d; box-shadow: 0 15px 34px rgba(15, 29, 54, .22); color: #fff; }
+.download-button.platform-macos:hover { background: #223452; box-shadow: 0 20px 40px rgba(15, 29, 54, .28); }
+.download-button.platform-android:hover { background: #f7faff; }
 .download-button:focus-visible { outline: 3px solid rgba(47, 114, 255, .3); outline-offset: 3px; }
-.download-button:disabled {
-  background: linear-gradient(135deg, #aeb5c2, #8e97a7);
-  box-shadow: 0 14px 30px rgba(42, 52, 70, .18);
-  color: #f7f8fa;
-  cursor: not-allowed;
-  opacity: 1;
-}
-.download-button:disabled small { color: #eef1f5; }
-.download-mark { grid-row: 1/3; font-family: Arial, sans-serif; font-size: 30px; }
-.download-button > span:nth-child(2) { align-self: end; font-size: 16px; font-weight: 900; }
-.download-button small { align-self: start; color: #dce7ff; font-size: 10px; font-weight: 600; }
-.download-button.compact { min-width: 220px; min-height: 58px; margin-top: 10px; grid-template-columns: 34px 1fr; grid-template-rows: 1fr; text-align: center; }
-.download-button.compact .download-mark { grid-row: auto; font-size: 25px; }
-.download-button.compact > span:nth-child(2) { align-self: center; }
+.download-mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; background: rgba(47, 114, 255, .1); color: var(--blue-deep); font-family: Arial, sans-serif; font-size: 19px; font-weight: 800; }
+.platform-windows .download-mark, .platform-macos .download-mark { background: rgba(255, 255, 255, .14); color: #fff; }
+.download-button-copy { min-width: 0; display: grid; gap: 3px; }
+.download-button-copy strong { overflow: hidden; font-size: 14px; font-weight: 800; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.download-button-copy small { color: #74839b; font-size: 12px; font-weight: 600; line-height: 1.25; }
+.platform-windows .download-button-copy small, .platform-macos .download-button-copy small { color: rgba(255, 255, 255, .72); }
+.download-arrow { justify-self: end; color: currentColor; font-size: 15px; opacity: .62; transition: transform .2s ease; }
+.download-button:hover .download-arrow { transform: translate(2px, 2px); }
+.download-button.compact { min-width: 200px; min-height: 58px; padding: 10px 13px; grid-template-columns: 32px minmax(0, 1fr) 16px; }
+.download-button.compact .download-mark { width: 32px; height: 32px; border-radius: 9px; font-size: 17px; }
 .download-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
-.mobile-download-button { background: #1d9b72; }
-.mobile-download-button:hover:not(:disabled) { box-shadow: 0 22px 44px rgba(29, 155, 114, .32); }
-.system-note, .pending-note { color: #8490a6; font-size: 11px; font-weight: 600; }
+.system-note, .pending-note { color: #7c899f; font-size: 12px; font-weight: 600; }
 
 .product-scene { position: relative; min-height: 560px; display: flex; align-items: center; justify-content: center; }
 .scene-glow { position: absolute; width: 670px; height: 510px; border-radius: 42% 58% 61% 39%; background: radial-gradient(circle at 40% 38%, #d9e7ff, #8cb6ff 52%, #467cf0 100%); box-shadow: 0 48px 90px rgba(40, 91, 205, .22); transform: rotate(-5deg); }
@@ -259,16 +267,25 @@ nav a.current::after { transform: scaleX(1); }
 .orbit-dot { position: absolute; width: 43px; height: 43px; border: 8px solid #fff; border-radius: 14px; background: var(--green); box-shadow: 0 8px 18px rgba(26,89,130,.13); }
 .d1 { top: 55px; right: 75px; }.d2 { bottom: 48px; left: 70px; background: #8b69f8; }
 
-.download-section { position: relative; min-height: 610px; padding: 110px 24px; display: grid; place-items: center; overflow: hidden; background: #0f1930; color: #fff; }
+.download-section { position: relative; min-height: 610px; padding: 110px 24px 122px; display: grid; place-items: center; overflow: hidden; background: #0f1930; color: #fff; }
 .download-section::before, .download-section::after { position: absolute; border: 1px solid rgba(126,169,255,.11); border-radius: 50%; content: ""; }
 .download-section::before { width: 720px; height: 720px; }.download-section::after { width: 940px; height: 520px; transform: rotate(-15deg); }
 .download-spotlight { position: absolute; top: 34%; left: 50%; width: 550px; height: 550px; border-radius: 50%; background: radial-gradient(circle, rgba(47,114,255,.28), transparent 68%); transform: translate(-50%,-50%); filter: blur(10px); }
-.download-copy { position: relative; z-index: 2; max-width: 790px; display: flex; flex-direction: column; align-items: center; text-align: center; }
-.download-platform-actions { justify-content: center; }
+.download-shell { position: relative; z-index: 2; width: min(1120px, 100%); display: grid; grid-template-columns: .86fr 1.14fr; align-items: center; gap: clamp(48px, 7vw, 92px); }
+.download-copy { max-width: 520px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
+.download-panel { padding: 18px; border: 1px solid rgba(149, 180, 239, .18); border-radius: 22px; background: rgba(21, 34, 61, .84); box-shadow: 0 28px 70px rgba(3, 9, 23, .3), inset 0 1px rgba(255, 255, 255, .04); backdrop-filter: blur(14px); }
+.download-panel-heading { padding: 3px 4px 16px; display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+.download-panel-heading span { font-size: 15px; font-weight: 800; }
+.download-panel-heading small { max-width: 260px; color: #8292ae; font-size: 12px; line-height: 1.45; text-align: right; }
+.download-platform-actions { display: grid; gap: 10px; }
+.download-panel .download-button { box-shadow: none; }
+.download-panel .download-button:hover { box-shadow: 0 15px 32px rgba(2, 8, 22, .2); }
 .download-copy .logo-mark { width: 74px; height: 74px; margin-bottom: 28px; }
 .download-copy > span { color: #82abff; }
 .download-copy h2 { margin-top: 20px; }
-.download-copy p { margin-bottom: 22px; color: #aab7cf; font-size: 16px; line-height: 1.8; }
+.download-copy p { max-width: 48ch; margin-bottom: 0; color: #aab7cf; font-size: 16px; line-height: 1.8; }
+.macos-preview-note { margin: 14px 5px 3px; color: #8190aa; font-size: 12px; line-height: 1.65; }
+.macos-preview-note strong { color: #b8c7e2; font-weight: 700; }
 .pending-note { margin-top: 12px; color: #7f8da8; }
 .contact-section { padding: 76px max(24px,calc((100% - 1080px)/2)); display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 72px; border-top: 1px solid #dce6f5; background: linear-gradient(135deg,#f7faff,#edf4ff); }
 .contact-copy { max-width: 610px; }
@@ -547,13 +564,17 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
 .feature-switch-links > a { min-height: 112px; padding: 20px; display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 15px; border: 1px solid #dbe5f5; border-radius: 16px; background: #fff; box-shadow: 0 12px 26px rgba(38,65,112,.08); }
 .feature-switch-links > a > i { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: var(--blue-soft); color: var(--blue); font-size: 18px; font-style: normal; }.feature-switch-links > a > span { display: flex; flex-direction: column; gap: 5px; }.feature-switch-links strong { font-size: 15px; }.feature-switch-links small { color: #8793a7; font-size: 9px; }.feature-switch-links b { color: var(--blue); font-size: 20px; font-weight: 400; transition: transform .18s ease; }.feature-switch-links > a:hover b { transform: translateX(4px); }
 .feature-download-band { min-height: 180px; padding: 32px max(24px,calc((100% - 1160px)/2)); display: flex; align-items: center; justify-content: space-between; gap: 32px; background: #102143; color: #fff; }
-.feature-download-band > div { display: flex; align-items: center; gap: 16px; }.feature-download-band > div > span { display: flex; flex-direction: column; gap: 5px; }.feature-download-band small { color: #7da7fa; font-family: Arial,sans-serif; font-size: 7px; font-weight: 900; letter-spacing: .16em; }.feature-download-band strong { font-size: 19px; }
+.feature-download-band > div:first-child { display: flex; align-items: center; gap: 16px; }.feature-download-band > div:first-child > span { display: flex; flex-direction: column; gap: 5px; }.feature-download-band small { color: #7da7fa; font-family: Arial,sans-serif; font-size: 12px; font-weight: 800; letter-spacing: .12em; }.feature-download-band strong { font-size: 19px; }
+.feature-download-actions { display: grid; grid-template-columns: repeat(2, minmax(190px, 1fr)); gap: 10px; }
 
 @media (max-width: 1050px) {
   .hero { grid-template-columns: 1fr; padding-top: 70px; text-align: center; }
   .hero-copy > p { margin-right: auto; margin-left: auto; }
   .privacy-pills { justify-content: center; margin-right: auto; margin-left: auto; }
   .hero-actions { align-items: center; }
+  .download-shell { max-width: 760px; grid-template-columns: 1fr; gap: 42px; }
+  .download-copy { max-width: 650px; margin: 0 auto; align-items: center; text-align: center; }
+  .download-copy p { margin-right: auto; margin-left: auto; }
   .product-scene { min-height: 580px; }
   .feature-grid { max-width: 620px; grid-template-columns: 1fr; }
   .feature-grid article, .feature-grid article.featured { min-height: 260px; transform: none; }
@@ -607,8 +628,10 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
   .privacy-pills { margin-bottom: 26px; gap: 6px; }
   .privacy-pills span { padding: 7px 9px; font-size: 9px; }
   .hero-actions { width: 100%; }
-  .hero-download-buttons { width: 100%; justify-content: center; }
-  .download-button { width: min(100%, 290px); min-width: 0; }
+  .hero-download-buttons { width: min(100%, 340px); grid-template-columns: 1fr; }
+  .hero-download-buttons .platform-android { min-height: 76px; grid-column: auto; }
+  .hero-download-buttons .platform-android .download-button-copy { display: grid; }
+  .download-button { width: 100%; }
   .system-note { text-align: center; }
   .product-scene { width: 100%; min-height: 430px; overflow: hidden; }
   .scene-glow { width: 500px; height: 370px; }
@@ -641,10 +664,14 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
   .download-section::before { width: 520px; height: 520px; }
   .download-section::after { width: 620px; height: 360px; }
   .download-spotlight { width: 390px; height: 390px; }
+  .download-shell { gap: 32px; }
   .download-copy { width: 100%; }
   .download-copy .logo-mark { width: 64px; height: 64px; margin-bottom: 24px; }
   .download-copy p { font-size: 14px; }
-  .download-button.compact { width: min(100%, 240px); min-width: 0; }
+  .download-panel { padding: 13px; border-radius: 18px; }
+  .download-panel-heading { padding: 4px 3px 14px; align-items: flex-start; flex-direction: column; gap: 5px; }
+  .download-panel-heading small { max-width: none; text-align: left; }
+  .download-button.compact { width: 100%; min-width: 0; }
   .download-platform-actions { width: 100%; }
   .contact-section { padding: 68px 24px; grid-template-columns: 1fr; justify-items: center; gap: 34px; text-align: center; }
   .contact-qr-card { width: min(100%, 300px); grid-template-columns: 138px 1fr; text-align: left; }
@@ -692,7 +719,8 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
   .feature-switch-links > a { min-height: 100px; padding: 16px; grid-template-columns: 44px 1fr auto; }
   .feature-switch-links > a > i { width: 44px; height: 44px; border-radius: 12px; }
   .feature-download-band { padding: 52px 18px; flex-direction: column; text-align: center; }
-  .feature-download-band > div { flex-direction: column; }
+  .feature-download-band > div:first-child { flex-direction: column; }
+  .feature-download-actions { width: min(100%, 360px); grid-template-columns: 1fr; }
 }
 
 @media (max-width: 480px) {
@@ -713,6 +741,8 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
   .privacy-band { padding-right: 14px; padding-left: 14px; }
   .privacy-visual { min-height: 240px; transform: scale(.7); }
   .download-section { min-height: 500px; padding-right: 14px; padding-left: 14px; }
+  .download-panel { padding: 10px; border-radius: 16px; }
+  .download-button { min-height: 72px; padding-right: 11px; padding-left: 11px; gap: 9px; }
   .contact-section { padding: 58px 18px; }
   .contact-copy h2 { font-size: 29px; }
   .contact-copy p { font-size: 14px; }

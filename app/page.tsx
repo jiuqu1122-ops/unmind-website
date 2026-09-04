@@ -14,8 +14,12 @@ export default function Home() {
             <span><i>✓</i> 本地存储</span><span><i>✓</i> 云端不留存创作内容</span><span><i>✓</i> 工业设计全流程</span>
           </div>
           <div className="hero-actions">
-            <div className="hero-download-buttons"><DownloadButton /><DownloadButton platform="android" /></div>
-            <span className="system-note">Windows 10 / 11 · Android 7.0+ 手机与平板</span>
+            <div className="hero-download-buttons">
+              <DownloadButton />
+              <DownloadButton platform="macos" />
+              <DownloadButton platform="android" />
+            </div>
+            <span className="system-note">Windows 10 / 11 · macOS 12+ Apple 芯片 · Android 7+</span>
           </div>
         </div>
 
@@ -197,7 +201,26 @@ export default function Home() {
 
       <section className="download-section" id="download" aria-labelledby="download-title">
         <div className="download-spotlight" />
-        <div className="download-copy"><LogoMark /><span>YOUR IDEAS, YOUR SPACE</span><h2 id="download-title">给每一份素材，一个能彼此连接的位置。</h2><p>下载灵感抽屉，在电脑、手机或平板上建立属于你的创作资料库与无限画布。</p><div className="download-platform-actions"><DownloadButton compact /><DownloadButton compact platform="android" /></div></div>
+        <div className="download-shell">
+          <div className="download-copy">
+            <LogoMark />
+            <span>YOUR IDEAS, YOUR SPACE</span>
+            <h2 id="download-title">给每一份素材，一个能彼此连接的位置。</h2>
+            <p>在电脑、手机或平板上建立自己的创作资料库与无限画布。选择设备，直接开始。</p>
+          </div>
+          <div className="download-panel" aria-label="选择下载平台">
+            <div className="download-panel-heading">
+              <span>选择你的设备</span>
+              <small>三个平台，项目始终保存在你自己的设备上</small>
+            </div>
+            <div className="download-platform-actions">
+              <DownloadButton />
+              <DownloadButton platform="macos" />
+              <DownloadButton platform="android" />
+            </div>
+            <p className="macos-preview-note"><strong>macOS Preview</strong> 当前支持 Apple Silicon，采用 ad-hoc 签名，首次运行请按压缩包内 README 操作。</p>
+          </div>
+        </div>
       </section>
 
       <SiteFooter />

@@ -53,6 +53,7 @@ chmod 600 .env
 ```env
 WEBSITE_IMAGE=ghcr.io/jiuqu1122-ops/unmind-website:latest
 NEXT_PUBLIC_DOWNLOAD_URL=
+NEXT_PUBLIC_MACOS_DOWNLOAD_URL=https://inspirationdrawer-1475663212.cos.ap-singapore.myqcloud.com/downloads/macos/preview/Inspiration-Drawer-macOS-Preview.zip
 NEXT_PUBLIC_MOBILE_DOWNLOAD_URL=https://api.unmind.art/v1/mobile/apk
 NEXT_PUBLIC_API_BASE_URL=https://api.unmind.art
 ```
@@ -61,9 +62,10 @@ NEXT_PUBLIC_API_BASE_URL=https://api.unmind.art
 
 ```env
 NEXT_PUBLIC_DOWNLOAD_URL=https://download.example.com/InspirationDrawer-Setup.exe
+NEXT_PUBLIC_MACOS_DOWNLOAD_URL=https://download.example.com/Inspiration-Drawer-macOS-Preview.zip
 ```
 
-`WEBSITE_IMAGE` 是服务器需要拉取的预构建镜像。三个 `NEXT_PUBLIC_*` 地址会写入静态
+`WEBSITE_IMAGE` 是服务器需要拉取的预构建镜像。四个 `NEXT_PUBLIC_*` 地址会写入静态
 构建产物，请在 GitHub 仓库的 `Settings → Secrets and variables → Actions → Variables`
 中配置；修改后重新运行 `Build website image` 工作流。
 

@@ -6,7 +6,11 @@ export const apiBaseUrl = (
 
 export const downloadUrl =
   process.env.NEXT_PUBLIC_DOWNLOAD_URL
-  || "https://gitee.com/zibinyou/inspiration-drawer/releases/download/v6.0.4/Inspiration.Drawer_6.0.4_x64-setup.exe";
+  || "https://github.com/jiuqu1122-ops/inspiration-drawer/releases/download/v6.0.24/Inspiration.Drawer_6.0.24_x64-setup.exe";
+
+export const macosDownloadUrl =
+  process.env.NEXT_PUBLIC_MACOS_DOWNLOAD_URL
+  || "https://inspirationdrawer-1475663212.cos.ap-singapore.myqcloud.com/downloads/macos/preview/Inspiration-Drawer-macOS-Preview.zip";
 
 export const mobileDownloadUrl =
   process.env.NEXT_PUBLIC_MOBILE_DOWNLOAD_URL
@@ -16,30 +20,50 @@ export function LogoMark({ small = false }: { small?: boolean }) {
   return <span className={small ? "logo-mark small" : "logo-mark"} aria-hidden="true" />;
 }
 
-export function DownloadButton({ compact = false, platform = "windows" }: { compact?: boolean; platform?: "windows" | "android" }) {
-  const isAndroid = platform === "android";
-  const className = ["download-button", compact ? "compact" : "", isAndroid ? "android" : ""].filter(Boolean).join(" ");
-  const url = isAndroid ? mobileDownloadUrl : downloadUrl;
+type DownloadPlatform = "windows" | "macos" | "android";
+
+const platformDownloads: Record<DownloadPlatform, { url: string; mark: string; label: string; detail: string; aria: string }> = {
+  windows: {
+    url: downloadUrl,
+    mark: "⊞",
+    label: "Windows 版",
+    detail: "Windows 10 / 11",
+    aria: "下载灵感抽屉 Windows 安装包",
+  },
+  macos: {
+    url: macosDownloadUrl,
+    mark: "⌘",
+    label: "macOS Preview",
+    detail: "Apple 芯片 · macOS 12+",
+    aria: "下载灵感抽屉 macOS Apple Silicon Preview 压缩包",
+  },
+  android: {
+    url: mobileDownloadUrl,
+    mark: "A",
+    label: "Android 版",
+    detail: "手机与平板 · Android 7+",
+    aria: "下载灵感抽屉 Android 移动端 APK",
+  },
+};
+
+export function DownloadButton({ compact = false, platform = "windows" }: { compact?: boolean; platform?: DownloadPlatform }) {
+  const download = platformDownloads[platform];
+  const className = ["download-button", `platform-${platform}`, compact ? "compact" : ""].filter(Boolean).join(" ");
 
   return (
-    <a className={className} href={url} download aria-label={`下载灵感抽屉${isAndroid ? "安卓移动端" : " Windows"}安装包`}>
-      <span className="download-mark" aria-hidden="true">↓</span>
-      <span>{isAndroid ? "下载安卓移动端" : "下载 Windows 版"}</span>
-      {!compact && <small>{isAndroid ? "适用于 Android 手机与平板" : "点击立即下载安装包"}</small>}
+    <a className={className} href={download.url} download aria-label={download.aria}>
+      <span className="download-mark" aria-hidden="true">{download.mark}</span>
+      <span className="download-button-copy">
+        <strong>{download.label}</strong>
+        {!compact && <small>{download.detail}</small>}
+      </span>
+      <span className="download-arrow" aria-hidden="true">↘</span>
     </a>
   );
 }
 
 export function MobileDownloadButton({ compact = false }: { compact?: boolean }) {
-  const className = compact ? "download-button compact mobile-download-button" : "download-button mobile-download-button";
-
-  return (
-    <a className={className} href={mobileDownloadUrl} download aria-label="下载灵感抽屉 Android 移动端 APK">
-      <span className="download-mark" aria-hidden="true">↓</span>
-      <span>下载 Android 版</span>
-      {!compact && <small>适用于 Android 手机和平板</small>}
-    </a>
-  );
+  return <DownloadButton compact={compact} platform="android" />;
 }
 
 type SiteSection = "home" | "tutorial" | "materials" | "notes" | "pin" | "space" | "admin";

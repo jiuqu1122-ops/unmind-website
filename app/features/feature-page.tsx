@@ -148,7 +148,7 @@ export function FeaturePage({ kind }: { kind: FeatureKind }) {
           <div className="eyebrow"><span /> {page.eyebrow}</div>
           <h1 id="feature-title">{page.title}</h1>
           <p>{page.intro}</p>
-          <div className="feature-hero-actions"><a className="text-action" href="#details">查看功能细节 <span>↓</span></a><Link href="/#download">下载 Windows 版 <span>→</span></Link></div>
+          <div className="feature-hero-actions"><a className="text-action" href="#details">查看功能细节 <span>↓</span></a><Link href="/#download">选择下载版本 <span>→</span></Link></div>
         </div>
         <div className="feature-effect-stage" aria-label={`${page.eyebrow} 产品界面效果图`}>
           <div className="feature-effect-glow" />
@@ -174,7 +174,7 @@ export function FeaturePage({ kind }: { kind: FeatureKind }) {
 
       <section className="feature-download-band">
         <div><LogoMark /><span><small>INSPIRATION DRAWER</small><strong>把创作过程留在自己的设备上。</strong></span></div>
-        <DownloadButton compact />
+        <div className="feature-download-actions"><DownloadButton compact /><DownloadButton compact platform="macos" /></div>
       </section>
       <SiteFooter />
     </main>
