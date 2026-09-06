@@ -1,4 +1,4 @@
-import { DownloadButton, LogoMark, SiteFooter, SiteHeader } from "./site-shared";
+import { DownloadButton, LogoMark, SiteFooter, SiteHeader, tutorialVideoUrl } from "./site-shared";
 
 export default function Home() {
   return (
@@ -98,9 +98,10 @@ export default function Home() {
         <div className="tutorial-player-shell">
           <div className="tutorial-player-bar"><span><i /> 灵感抽屉 · 快速上手</span><small>04:42</small></div>
           <video className="tutorial-video" controls playsInline preload="metadata" aria-describedby="tutorial-description">
-            <source src="/inspiration-drawer-tutorial.mp4" type="video/mp4" />
-            您的浏览器不支持视频播放，可<a href="/inspiration-drawer-tutorial.mp4">下载教程视频</a>查看。
+            <source src={tutorialVideoUrl} type="video/mp4" />
+            您的浏览器不支持视频播放，可<a href={tutorialVideoUrl}>下载教程视频</a>查看。
           </video>
+          <p className="tutorial-player-help">播放遇到问题？<a href={tutorialVideoUrl} download>下载教程视频</a></p>
         </div>
       </section>
 

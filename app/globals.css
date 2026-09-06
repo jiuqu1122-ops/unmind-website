@@ -354,6 +354,9 @@ footer > span { justify-self: end; font-family: Arial,sans-serif; letter-spacing
 .tutorial-player-bar i { width: 8px; height: 8px; display: inline-block; border-radius: 50%; background: #4d8cff; box-shadow: 0 0 0 5px rgba(77,140,255,.14); }
 .tutorial-player-bar small { color: #7186aa; font-family: Arial,sans-serif; font-size: 9px; }
 .tutorial-video { position: relative; z-index: 1; width: 100%; aspect-ratio: 16/9; display: block; border-radius: 21px; background: #050913; object-fit: contain; }
+.tutorial-player-help { position: relative; z-index: 1; margin: 12px 8px 4px; color: #aab7cf; font-size: 14px; line-height: 1.6; text-align: right; }
+.tutorial-player-help a { margin-left: 8px; color: #b9cef7; text-decoration: underline; text-underline-offset: 3px; }
+.tutorial-player-help a:focus-visible { outline: 2px solid #b9cef7; outline-offset: 4px; }
 
 .workflow-library-section { padding: 118px max(24px,calc((100% - 1240px)/2)); background: #fff; }
 .workflow-library-heading { margin-bottom: 54px; display: grid; grid-template-columns: 1.08fr .92fr; align-items: end; gap: 72px; }

@@ -212,3 +212,41 @@ docker compose up -d --no-build website
 ```
 
 不要运行后端项目的 `docker compose down -v`，避免影响 PostgreSQL 数据卷。
+
+## 八、教程视频走 COS 直连
+
+首页的原生 `<video>` 直接读取腾讯 COS，不经过官网 Caddy/Nginx 或 API。视频地址在
+`app/site-shared.tsx` 的 `tutorialVideoUrl`；`nginx.conf` 将旧地址
+`/inspiration-drawer-tutorial.mp4` 以 302 跳转到同一个 COS 对象，兼容旧页面和收藏链接。
+`public` 中的原视频保留为源文件，首页不再读取它。
+
+当前对象：
+
+```text
+https://inspirationdrawer-1475663212.cos.ap-singapore.myqcloud.com/website/tutorials/be07f0efa479d062/inspiration-drawer-tutorial.mp4
+```
+
+- 视频为 1280 × 720、H.264/AAC、282.667 秒、11,367,082 字节；MP4 索引位于文件头，可边下载边播放。
+- 只有这个公开教程对象设为 `public-read`，无需签名和后端鉴权；没有修改桶权限或其他对象。
+- 对象元数据使用 `Content-Type: video/mp4`、`Cache-Control: public, max-age=31536000, immutable`。
+- URL 目录取文件 SHA-256 前 16 位。完整 SHA-256 为 `be07f0efa479d062da7826c90e36d2977bf01f0ac8a60b270e2d8a6b2bf92596`。
+- COS 默认域名的 GET 可能强制返回 `Content-Disposition: attachment`；网页使用视频子资源请求，独立链接用于下载。不要添加需要跨域授权的 `crossOrigin` 属性。
+- 更新视频时上传到新的内容版本目录，核验公开访问和 Range 响应后，同时更新页面常量及 Nginx 旧地址跳转；不要覆盖已长期缓存的对象。
+
+本次变更推送后，等待 GitHub Actions 的 `Build website image` 成功，再执行：
+
+```bash
+cd /opt/unmind-website
+bash scripts/deploy.sh
+curl --fail --silent --show-error https://www.unmind.art/ | grep -o '<source[^>]*>'
+curl -I https://www.unmind.art/inspiration-drawer-tutorial.mp4
+curl --fail --silent --show-error --range 0-1023 -D - -o /dev/null \
+  https://inspirationdrawer-1475663212.cos.ap-singapore.myqcloud.com/website/tutorials/be07f0efa479d062/inspiration-drawer-tutorial.mp4
+```
+
+预期首页视频源指向 COS；旧地址返回 302，`Location` 指向同一对象；COS 返回
+`206 Partial Content`、`Content-Range: bytes 0-1023/11367082` 和 `video/mp4`。
+本次只需更新官网容器，无需重启 API 或运行数据库迁移。
+
+当前复用的是新加坡 COS，已避开官网服务器带宽；中国大陆用户仍可能受跨境网络影响。
+若切换后仍有区域性卡顿，再使用已备案的自定义域名接入国内 CDN，或评估国内 COS 桶。

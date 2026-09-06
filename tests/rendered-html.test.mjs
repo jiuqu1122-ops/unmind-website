@@ -39,7 +39,8 @@ test("renders the finished Inspiration Drawer landing page", async () => {
   assert.match(html, /微信联系/);
   assert.match(html, /contact-wechat-qr\.png/);
   assert.match(html, /id="tutorial"/);
-  assert.match(html, /inspiration-drawer-tutorial\.mp4/);
+  assert.match(html, /<source src="https:\/\/inspirationdrawer-1475663212\.cos\.ap-singapore\.myqcloud\.com\/website\/tutorials\/[a-f0-9]+\/inspiration-drawer-tutorial\.mp4" type="video\/mp4"/);
+  assert.doesNotMatch(html, /(?:src|href)="\/inspiration-drawer-tutorial\.mp4"/);
   assert.match(html, /04:42/);
   assert.match(html, /inspirationdrawer-1475663212\.cos\.ap-singapore\.myqcloud\.com\/downloads\/windows\/releases\/v6\.0\.24\/Inspiration\.Drawer_6\.0\.24_x64-setup\.exe/);
   assert.match(html, /inspirationdrawer-1475663212\.cos\.ap-singapore\.myqcloud\.com\/downloads\/macos\/preview\/Inspiration-Drawer-macOS-Preview\.zip/);

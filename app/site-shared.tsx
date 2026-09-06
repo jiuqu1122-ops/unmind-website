@@ -16,6 +16,11 @@ export const mobileDownloadUrl =
   process.env.NEXT_PUBLIC_MOBILE_DOWNLOAD_URL
   || `${apiBaseUrl}/v1/mobile/apk`;
 
+// Public, content-versioned COS object: no expiring signature or website proxy.
+// Keep the legacy redirect in nginx.conf in sync when replacing this video.
+export const tutorialVideoUrl =
+  "https://inspirationdrawer-1475663212.cos.ap-singapore.myqcloud.com/website/tutorials/be07f0efa479d062/inspiration-drawer-tutorial.mp4";
+
 export function LogoMark({ small = false }: { small?: boolean }) {
   return <span className={small ? "logo-mark small" : "logo-mark"} aria-hidden="true" />;
 }
