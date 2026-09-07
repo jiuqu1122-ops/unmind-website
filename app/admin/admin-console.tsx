@@ -28,9 +28,10 @@ import {
   type ReviewShare,
   type VideoPricingDraft,
 } from "./admin-model";
+import { AiModelCenter } from "./ai-model-center";
 import styles from "./admin.module.css";
 
-type Tab = "users" | "codes" | "providers" | "pricing" | "reviews";
+type Tab = "users" | "codes" | "providers" | "models" | "pricing" | "reviews";
 type AuthorizationStatus = "ACTIVE" | "SUSPENDED" | "DISABLED";
 
 const formatCredits = (value?: string | null) => {
@@ -71,7 +72,12 @@ const creditPattern = /^(?:0|[1-9]\d{0,6})$/;
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => ({})) as { message?: string };
-  if (!response.ok) throw new Error(payload.message || `请求失败（HTTP ${response.status}）`);
+  if (!response.ok) {
+    throw Object.assign(
+      new Error(payload.message || `请求失败（HTTP ${response.status}）`),
+      { status: response.status },
+    );
+  }
   return payload as T;
 }
 
@@ -731,7 +737,7 @@ export function AdminConsole() {
   return (
     <section className={styles.console}>
       <header className={styles.consoleHead}>
-        <div><span>UNMIND OPERATIONS</span><h1>额度管理器</h1><p>账户、兑换码、渠道、定价与内容审核</p></div>
+        <div><span>UNMIND OPERATIONS</span><h1>运营管理台</h1><p>账户、渠道、Canonical Model、版本定价与内容审核</p></div>
         <button className={styles.ghost} type="button" onClick={disconnect}>断开连接</button>
       </header>
 
@@ -746,7 +752,8 @@ export function AdminConsole() {
         <button className={tab === "users" ? styles.active : ""} onClick={() => setTab("users")}>用户与额度</button>
         <button className={tab === "codes" ? styles.active : ""} onClick={() => setTab("codes")}>兑换码</button>
         <button className={tab === "providers" ? styles.active : ""} onClick={() => setTab("providers")}>渠道管理</button>
-        <button className={tab === "pricing" ? styles.active : ""} onClick={() => setTab("pricing")}>AI 定价</button>
+        <button className={tab === "models" ? styles.active : ""} onClick={() => setTab("models")}>AI Model Center</button>
+        <button className={tab === "pricing" ? styles.active : ""} onClick={() => setTab("pricing")}>旧版定价兼容</button>
         <button className={tab === "reviews" ? styles.active : ""} onClick={() => setTab("reviews")}>灵感空间审核</button>
       </nav>
 
@@ -913,6 +920,16 @@ export function AdminConsole() {
             </form>
           </section>
         </div>
+      )}
+
+      {tab === "models" && (
+        <AiModelCenter
+          request={request}
+          providers={providers}
+          onError={setError}
+          onNotice={setNotice}
+          onUseLegacy={() => setTab("pricing")}
+        />
       )}
 
       {tab === "pricing" && pricing && chatPricing && (
