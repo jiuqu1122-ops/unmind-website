@@ -92,6 +92,12 @@ export type AdminAiModelDetail = Omit<AdminAiModelSummary,
     source: string;
     publishedAt: string;
   }>;
+  _count?: {
+    routes: number;
+    priceVersions: number;
+    requests: number;
+    billingSettlements: number;
+  };
 };
 
 export type AiUpstreamDiscovery = {
@@ -348,6 +354,9 @@ export function priceDiffRows(current: JsonObject | null, pending: JsonObject | 
 }
 
 export function humanModelStatus(model: AdminAiModelSummary) {
+  if (model.status === "DRAFT") return "草稿";
+  if (model.status === "RETIRED") return "已退役";
+  if (!model.enabled) return "已停用";
   if (!model.routes.some((route) => route.enabled)) return "无可用上游";
   if (!model.routes.some((route) => route.enabled && route.upstreamAvailable)) return "上游异常";
   return "正常";

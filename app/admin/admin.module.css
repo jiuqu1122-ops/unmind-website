@@ -255,6 +255,7 @@
 .humanStatus,.pendingBadge { padding: 4px 7px; border-radius: 99px; font-size: 8px; font-weight: 900; }
 .humanStatus { background: #edf6ff; color: #2964b7; }
 .humanStatus[data-status="无可用上游"] { background: #f0f1f4; color: #687488; }
+.humanStatus[data-status="草稿"],.humanStatus[data-status="已停用"],.humanStatus[data-status="已退役"] { background: #f0f1f4; color: #687488; }
 .humanStatus[data-status="上游异常"] { background: #fff0f0; color: #bc3f3f; }
 .pendingBadge { background: #fff1dd; color: #a7610a; }
 .modelTable td:last-child button { min-height: 29px; padding: 0 9px; background: #eef3fd; color: #2c61bc; }

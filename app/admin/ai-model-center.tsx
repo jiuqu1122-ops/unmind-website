@@ -944,6 +944,21 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
     });
   };
 
+  const deleteModel = () => {
+    if (!detail) return;
+    const model = detail;
+    setConfirmation({
+      title: "永久删除这个模型？",
+      message: <><p>将删除“{model.displayName}”及其未发布配置和兼容名称。此操作无法撤销。</p><strong>仅未启用、未展示、没有渠道、没有价格版本和调用记录的草稿模型允许删除。</strong></>,
+      confirmLabel: "确认删除模型",
+      danger: true,
+      action: async () => { await perform(() => request(`/v1/admin/ai-models/${encodeURIComponent(model.canonicalModelKey)}`, {
+        method: "DELETE",
+        body: JSON.stringify({ expectedUpdatedAt: model.updatedAt }),
+      }), `${model.displayName} 已删除`, ""); },
+    });
+  };
+
   const publishPrice = () => {
     if (!detail?.pricing?.pendingPrice) return;
     setConfirmation({
@@ -1007,6 +1022,14 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
   const pendingDiff = priceDiffRows(currentPrice, detail?.pricing?.pendingPrice ?? null);
   const attentionModels = models.filter((model) => model.pendingPrice || model.routes.some((route) => route.pricingSyncStatus.startsWith("WARNING") || !route.upstreamAvailable));
   const syncChanges = syncResult?.changes ?? [];
+  const canDeleteSelectedModel = Boolean(detail
+    && detail.status === "DRAFT"
+    && !detail.enabled
+    && !detail.visible
+    && detail.routes.length === 0
+    && detail.priceVersions.length === 0
+    && (detail._count?.requests ?? 0) === 0
+    && (detail._count?.billingSettlements ?? 0) === 0);
 
   if (!supported) return (
     <section className={`${styles.panel} ${styles.modelCenterUnavailable}`}>
@@ -1089,14 +1112,14 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
           </section>
 
           {detail && <section className={styles.modelEditor} aria-busy={loading || busy}>
-            <header className={styles.modelEditorHeader}><div><span>{detail.canonicalModelKey}</span><h3>{detail.displayName}</h3><p>{basic.routingMode === "LEGACY" ? "正在使用旧版兼容配置，不影响当前使用。" : "由已启用的上游渠道按优先级提供服务。"}</p></div><div><i data-on={detail.visible}>{detail.visible ? "用户可见" : "已隐藏"}</i><i data-on={detail.enabled}>{detail.enabled ? "允许调用" : "已停用"}</i>{dirty && <b>有未保存修改</b>}</div></header>
+            <header className={styles.modelEditorHeader}><div><span>{detail.canonicalModelKey}</span><h3>{detail.displayName}</h3><p>{basic.routingMode === "LEGACY" ? "正在使用旧版兼容配置，不影响当前使用。" : "由已启用的上游渠道按优先级提供服务。"}</p></div><div><i data-on={detail.visible}>{detail.visible ? "用户可见" : "已隐藏"}</i><i data-on={detail.enabled}>{detail.enabled ? "允许调用" : "已停用"}</i>{dirty && <b>有未保存修改</b>}{canDeleteSelectedModel && <button type="button" className={styles.textDanger} disabled={busy || dirty} onClick={deleteModel}>删除模型</button>}</div></header>
 
             {basic.visible && !basic.enabled && <div className={styles.inlineWarning}>用户可以看到，但当前无法调用。</div>}
 
             <div className={styles.editorSectionGrid}>
               <section className={styles.editorCard}>
                 <header><div><span>01</span><h4>基本设置</h4></div><button type="button" disabled={busy} onClick={() => void saveSettings()}>{busy ? "正在保存…" : "保存设置"}</button></header>
-                <div className={styles.formGrid}><label><strong>模型名称</strong><input value={basic.displayName} onChange={(event) => setBasic({ ...basic, displayName: event.target.value })} /></label><label><strong>模型类型</strong><input value={modalityLabel[detail.modality]} disabled /></label><label><strong>默认渠道</strong><select value={basic.defaultRouteId} onChange={(event) => setBasic({ ...basic, defaultRouteId: event.target.value })}><option value="">按优先级自动选择</option>{detail.routes.filter((route) => route.enabled).map((route) => <option key={route.id} value={route.id}>{route.channel?.name ?? route.provider}</option>)}</select></label><label><strong>排序</strong><input type="number" value={basic.sortOrder} onChange={(event) => setBasic({ ...basic, sortOrder: event.target.value })} /></label></div>
+                <div className={styles.formGrid}><label><strong>模型名称</strong><input value={basic.displayName} onChange={(event) => setBasic({ ...basic, displayName: event.target.value })} /></label><label><strong>模型类型</strong><input value={modalityLabel[detail.modality]} disabled /></label><label><strong>发布状态</strong><select value={basic.status} onChange={(event) => setBasic({ ...basic, status: event.target.value as BasicDraft["status"] })}><option value="DRAFT">草稿（客户端不可见）</option><option value="PUBLISHED">已发布</option><option value="RETIRED">已退役</option></select></label><label><strong>默认渠道</strong><select value={basic.defaultRouteId} onChange={(event) => setBasic({ ...basic, defaultRouteId: event.target.value })}><option value="">按优先级自动选择</option>{detail.routes.filter((route) => route.enabled).map((route) => <option key={route.id} value={route.id}>{route.channel?.name ?? route.provider}</option>)}</select></label><label><strong>排序</strong><input type="number" value={basic.sortOrder} onChange={(event) => setBasic({ ...basic, sortOrder: event.target.value })} /></label></div>
                 <div className={styles.switchGrid}><SwitchField label="用户可见" hint="开启后出现在客户端模型列表" checked={basic.visible} onChange={(visible) => setBasic({ ...basic, visible })} /><SwitchField label="允许调用" hint="开启后服务器接受实际请求" checked={basic.enabled} onChange={(enabled) => setBasic({ ...basic, enabled })} /></div>
                 <div className={styles.aliasManager}><header><div><strong>兼容名称</strong><small>旧客户端或上游名称仍可识别</small></div><div><input placeholder="输入兼容名称" value={newAlias} onChange={(event) => setNewAlias(event.target.value)} /><button type="button" disabled={busy || !newAlias.trim()} onClick={() => void addAlias()}>添加</button></div></header><div>{detail.aliases.map((alias) => <span key={alias.id}>{alias.alias}<small>{alias.source === "ADMIN" ? "手工兼容" : alias.source.includes("MAPPING") ? "上游映射" : "旧版兼容"}</small>{alias.source === "ADMIN" && <button type="button" aria-label={`删除 ${alias.alias}`} onClick={() => deleteAlias(alias)}>×</button>}</span>)}</div></div>
               </section>

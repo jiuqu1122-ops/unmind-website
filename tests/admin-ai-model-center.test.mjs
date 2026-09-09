@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   canonicalKeyDraft,
   costSummary,
+  humanModelStatus,
   isModelCenterUnavailable,
   isUnsupportedPrice,
   lowestRouteCost,
@@ -91,8 +92,16 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /保存为待发布/);
   assert.match(source, /发布新价格/);
   assert.match(source, /Capabilities JSON（只读）/);
+  assert.match(source, /确认删除模型/);
+  assert.match(source, /method: "DELETE"/);
   assert.doesNotMatch(source, /<textarea/);
   assert.doesNotMatch(source, /<input[^>]+upstreamModelId/);
+});
+
+test("shows lifecycle state before route health", () => {
+  assert.equal(humanModelStatus({ status: "DRAFT", enabled: true, routes: [{ enabled: true, upstreamAvailable: true }] }), "草稿");
+  assert.equal(humanModelStatus({ status: "RETIRED", enabled: false, routes: [] }), "已退役");
+  assert.equal(humanModelStatus({ status: "PUBLISHED", enabled: false, routes: [{ enabled: true }] }), "已停用");
 });
 
 test("chooses the lowest representative upstream route without changing priority", () => {
