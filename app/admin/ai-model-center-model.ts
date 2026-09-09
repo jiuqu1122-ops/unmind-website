@@ -7,7 +7,7 @@ export type AiPricingMode = "MANUAL" | "MARKUP";
 
 export type AiModelRoute = {
   id: string;
-  canonicalModelId: string;
+  canonicalModelId: string | null;
   provider: string;
   channelId: string | null;
   upstreamModelId: string;
@@ -21,6 +21,7 @@ export type AiModelRoute = {
   metadata: JsonObject | null;
   pricingSyncStatus: string;
   costUpdatedAt: string | null;
+  updatedAt: string;
   channel: {
     id: string;
     name: string;
@@ -47,6 +48,7 @@ export type AdminAiModelSummary = {
   routingMode: AiRoutingMode;
   capabilities: JsonObject;
   status: AiModelStatus;
+  updatedAt: string;
   defaultRouteId: string | null;
   currentRoute: AiModelRoute | null;
   routes: AiModelRoute[];
@@ -100,10 +102,14 @@ export type AiUpstreamDiscovery = {
   suggestedModality: AiModelModality | null;
   availability: string;
   capabilities: JsonObject | null;
+  context: unknown;
+  resolution: unknown;
+  duration: unknown;
   discoveredCost: JsonObject | null;
   metadata: JsonObject | null;
   status: string;
   lastSyncedAt: string;
+  updatedAt: string;
   channel: {
     id: string;
     name: string;
@@ -162,6 +168,13 @@ const resolutionEntries = (value: unknown) => {
   });
 };
 
+export const unsupportedPriceSentinel = 99_999;
+
+export const isUnsupportedPrice = (value: unknown) => {
+  const numeric = numberValue(value);
+  return numeric !== null && numeric >= unsupportedPriceSentinel;
+};
+
 export function formatJson(value: unknown) {
   return JSON.stringify(value ?? {}, null, 2);
 }
@@ -192,7 +205,11 @@ export function priceSummary(pricing: JsonObject | null) {
   const billingType = String(pricing.billingType || "");
   const resolutions = resolutionEntries(pricing.creditsPerImageByResolution);
   if (resolutions.length) {
-    return resolutions.map(([key, value]) => `${key.toUpperCase()} ${compactNumber(value)} 点`).join(" · ");
+    return resolutions.map(([key, value]) => (
+      isUnsupportedPrice(value)
+        ? `${key.toUpperCase()} 不支持`
+        : `${key.toUpperCase()} ${compactNumber(value)} 点`
+    )).join(" · ");
   }
   if (billingType === "token") {
     const standard = objectValue(pricing.standard);
@@ -201,11 +218,11 @@ export function priceSummary(pricing: JsonObject | null) {
     if (input !== null && output !== null) return `输入 ${compactNumber(input)} / 输出 ${compactNumber(output)} 点·1M`;
   }
   const perRequest = firstNumber(pricing, ["creditsPerRequest"]);
-  if (perRequest !== null) return `${compactNumber(perRequest)} 点/次`;
+  if (perRequest !== null) return isUnsupportedPrice(perRequest) ? "不支持" : `${compactNumber(perRequest)} 点/次`;
   const perImage = firstNumber(pricing, ["creditsPerImage"]);
-  if (perImage !== null) return `${compactNumber(perImage)} 点/张`;
+  if (perImage !== null) return isUnsupportedPrice(perImage) ? "不支持" : `${compactNumber(perImage)} 点/张`;
   const perSecond = firstNumber(pricing, ["creditsPerSecond", "credits"]);
-  if (perSecond !== null) return `${compactNumber(perSecond)} 点/秒`;
+  if (perSecond !== null) return isUnsupportedPrice(perSecond) ? "不支持" : `${compactNumber(perSecond)} 点/秒`;
   return billingType || "已配置";
 }
 
@@ -247,9 +264,93 @@ function representativePair(pricing: JsonObject | null, cost: JsonObject | null)
 
 export function marginPercent(pricing: JsonObject | null, cost: JsonObject | null) {
   const pair = representativePair(pricing, cost);
-  if (!pair || pair.sellPoints <= 0) return null;
+  if (!pair || pair.sellPoints <= 0 || isUnsupportedPrice(pair.sellPoints)) return null;
   const sellCny = pair.sellPoints / 100;
   return ((sellCny - pair.costCny) / sellCny) * 100;
+}
+
+export function marginDetails(pricing: JsonObject | null, cost: JsonObject | null) {
+  const pair = representativePair(pricing, cost);
+  if (!pair || pair.sellPoints <= 0 || isUnsupportedPrice(pair.sellPoints)) return null;
+  const sellCny = pair.sellPoints / 100;
+  const profitCny = sellCny - pair.costCny;
+  return {
+    sellPoints: pair.sellPoints,
+    sellCny,
+    costCny: pair.costCny,
+    profitCny,
+    marginPercent: (profitCny / sellCny) * 100,
+  };
+}
+
+export type PriceDiffRow = {
+  key: string;
+  label: string;
+  unit: string;
+  before: number | null;
+  after: number | null;
+};
+
+const pricingValueRows = (pricing: JsonObject | null) => {
+  if (!pricing) return new Map<string, Omit<PriceDiffRow, "before" | "after"> & { value: number }>();
+  const rows = new Map<string, Omit<PriceDiffRow, "before" | "after"> & { value: number }>();
+  const add = (key: string, label: string, unit: string, value: unknown) => {
+    const numeric = numberValue(value);
+    if (numeric === null || isUnsupportedPrice(numeric)) return;
+    rows.set(key, { key, label, unit, value: numeric });
+  };
+  const billingType = String(pricing.billingType || "");
+  if (billingType === "token") {
+    const standard = objectValue(pricing.standard);
+    const extended = objectValue(pricing.extended);
+    add("standard.input", "普通上下文 · 输入", "积分 / 1M", standard?.inputCreditsPerMillion);
+    add("standard.output", "普通上下文 · 输出", "积分 / 1M", standard?.outputCreditsPerMillion);
+    add("standard.cacheRead", "普通上下文 · 缓存读取", "积分 / 1M", standard?.cachedInputCreditsPerMillion);
+    add("standard.cacheWrite", "普通上下文 · 缓存写入", "积分 / 1M", standard?.cacheWriteCreditsPerMillion);
+    add("extended.input", "长上下文 · 输入", "积分 / 1M", extended?.inputCreditsPerMillion);
+    add("extended.output", "长上下文 · 输出", "积分 / 1M", extended?.outputCreditsPerMillion);
+    add("extended.cacheRead", "长上下文 · 缓存读取", "积分 / 1M", extended?.cachedInputCreditsPerMillion);
+    add("extended.cacheWrite", "长上下文 · 缓存写入", "积分 / 1M", extended?.cacheWriteCreditsPerMillion);
+  }
+  for (const [resolution, value] of resolutionEntries(pricing.creditsPerImageByResolution)) {
+    add(`image.${resolution.toLowerCase()}`, resolution.toUpperCase(), "积分 / 张", value);
+  }
+  add("request", "每次请求", "积分 / 次", pricing.creditsPerRequest);
+  add("image", "每张图片", "积分 / 张", pricing.creditsPerImage);
+  add("video.second", "基础价格", "积分 / 秒", pricing.creditsPerSecond ?? pricing.credits);
+  add("video.flat", "每段视频", "积分 / 段", pricing.creditsPerVideo);
+  for (const [duration, value] of resolutionEntries(pricing.creditsByDuration)) {
+    add(`duration.${duration}`, `${duration} 秒`, "积分", value);
+  }
+  for (const [resolution, value] of resolutionEntries(pricing.creditsByResolution)) {
+    add(`videoResolution.${resolution}`, resolution.toUpperCase(), "积分 / 秒", value);
+  }
+  return rows;
+};
+
+export function priceDiffRows(current: JsonObject | null, pending: JsonObject | null) {
+  const before = pricingValueRows(current);
+  const after = pricingValueRows(pending);
+  return Array.from(new Set([...before.keys(), ...after.keys()])).flatMap((key) => {
+    const previous = before.get(key);
+    const next = after.get(key);
+    const beforeValue = previous?.value ?? null;
+    const afterValue = next?.value ?? null;
+    if (beforeValue === afterValue) return [];
+    return [{
+      key,
+      label: next?.label ?? previous?.label ?? key,
+      unit: next?.unit ?? previous?.unit ?? "积分",
+      before: beforeValue,
+      after: afterValue,
+    }];
+  });
+}
+
+export function humanModelStatus(model: AdminAiModelSummary) {
+  if (!model.routes.some((route) => route.enabled)) return "无可用上游";
+  if (!model.routes.some((route) => route.enabled && route.upstreamAvailable)) return "上游异常";
+  return "正常";
 }
 
 export function lowestRouteCost(routes: AiModelRoute[]) {

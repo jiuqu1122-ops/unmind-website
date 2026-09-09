@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   canonicalKeyDraft,
   costSummary,
   isModelCenterUnavailable,
+  isUnsupportedPrice,
   lowestRouteCost,
+  marginDetails,
   marginPercent,
   modelMatchesModality,
   parseJsonObject,
+  priceDiffRows,
   priceSummary,
 } from "../app/admin/ai-model-center-model.ts";
 
@@ -40,10 +44,55 @@ test("keeps route cost and sell price separate when calculating margin", () => {
   };
   assert.equal(costSummary(cost), "2K ¥0.07 · 4K ¥0.11");
   assert.equal(marginPercent(price, cost), 56.25);
+  assert.deepEqual(marginDetails(price, cost), {
+    sellPoints: 16,
+    sellCny: 0.16,
+    costCny: 0.07,
+    profitCny: 0.09,
+    marginPercent: 56.25,
+  });
   assert.deepEqual(price, {
     billingType: "image_resolution",
     creditsPerImageByResolution: { "2k": "16", "4k": "20" },
   });
+});
+
+test("hides unsupported price sentinels and produces an operator-readable price diff", () => {
+  const current = {
+    billingType: "image_resolution",
+    creditsPerImageByResolution: { "1k": "99999", "2k": "16", "4k": "20" },
+  };
+  const pending = {
+    billingType: "image_resolution",
+    creditsPerImageByResolution: { "2k": "18", "4k": "22" },
+  };
+  assert.equal(isUnsupportedPrice("99999"), true);
+  assert.equal(priceSummary(current), "1K 不支持 · 2K 16 点 · 4K 20 点");
+  assert.doesNotMatch(priceSummary(current), /99,?999/);
+  assert.deepEqual(priceDiffRows(current, pending), [{
+    key: "image.2k",
+    label: "2K",
+    unit: "积分 / 张",
+    before: 16,
+    after: 18,
+  }, {
+    key: "image.4k",
+    label: "4K",
+    unit: "积分 / 张",
+    before: 20,
+    after: 22,
+  }]);
+});
+
+test("keeps all operational edits structured and raw JSON read-only", async () => {
+  const source = await readFile(new URL("../app/admin/ai-model-center.tsx", import.meta.url), "utf8");
+  assert.match(source, /更改上游映射/);
+  assert.match(source, /解除上游映射/);
+  assert.match(source, /保存为待发布/);
+  assert.match(source, /发布新价格/);
+  assert.match(source, /Capabilities JSON（只读）/);
+  assert.doesNotMatch(source, /<textarea/);
+  assert.doesNotMatch(source, /<input[^>]+upstreamModelId/);
 });
 
 test("chooses the lowest representative upstream route without changing priority", () => {
