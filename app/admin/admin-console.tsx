@@ -754,7 +754,7 @@ export function AdminConsole() {
         <button className={tab === "codes" ? styles.active : ""} onClick={() => setTab("codes")}>兑换码</button>
         <button className={tab === "providers" ? styles.active : ""} onClick={() => setTab("providers")}>渠道管理</button>
         <button className={tab === "models" ? styles.active : ""} onClick={() => setTab("models")}>AI Model Center</button>
-        <button className={tab === "pricing" ? styles.active : ""} onClick={() => setTab("pricing")}>旧版定价兼容</button>
+        <button className={tab === "pricing" ? styles.active : ""} onClick={() => setTab("pricing")}>AI 定价（含文字节点）</button>
         <button className={tab === "reviews" ? styles.active : ""} onClick={() => setTab("reviews")}>灵感空间审核</button>
       </nav>
 
@@ -980,7 +980,7 @@ export function AdminConsole() {
           </section>
           <form className={styles.pricingForm} onSubmit={savePricing}>
           <section className={styles.panel}>
-            <div className={styles.panelTitle}><strong>基础定价</strong><span>积分</span></div>
+            <div className={styles.panelTitle}><strong>任务与基础定价</strong><span>积分</span></div>
             <div className={styles.basePricingGrid}>
               <label><strong>Agent 请求</strong><input type="number" min={0} max={1000000} value={pricing.agentRequestCredits} onChange={(event) => setPricing({ ...pricing, agentRequestCredits: event.target.value })} /></label>
               <label><strong>图片分析</strong><input type="number" min={0} max={1000000} value={pricing.inspirationAnalysisCredits} onChange={(event) => setPricing({ ...pricing, inspirationAnalysisCredits: event.target.value })} /></label>
