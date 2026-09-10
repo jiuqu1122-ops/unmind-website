@@ -649,6 +649,7 @@ export function AdminConsole() {
     const values = [
       pricing.agentRequestCredits,
       pricing.inspirationAnalysisCredits,
+      pricing.canvasTextAgentCredits,
       pricing.imageDefaultCredits,
       pricing.videoDefaultCredits,
       ...pricing.imageModels.flatMap((item) => [item.credits1k, item.credits2k, item.credits4k].filter(Boolean)),
@@ -983,6 +984,7 @@ export function AdminConsole() {
             <div className={styles.basePricingGrid}>
               <label><strong>Agent 请求</strong><input type="number" min={0} max={1000000} value={pricing.agentRequestCredits} onChange={(event) => setPricing({ ...pricing, agentRequestCredits: event.target.value })} /></label>
               <label><strong>图片分析</strong><input type="number" min={0} max={1000000} value={pricing.inspirationAnalysisCredits} onChange={(event) => setPricing({ ...pricing, inspirationAnalysisCredits: event.target.value })} /></label>
+              <label><strong>文字分析节点 / 次</strong><input type="number" min={0} max={1000000} value={pricing.canvasTextAgentCredits} onChange={(event) => setPricing({ ...pricing, canvasTextAgentCredits: event.target.value })} /><small>仅画布文字分析节点按次结算；普通 Chat 和工作流仍按 Token</small></label>
               <label><strong>其他生图默认</strong><input type="number" min={0} max={1000000} value={pricing.imageDefaultCredits} onChange={(event) => setPricing({ ...pricing, imageDefaultCredits: event.target.value })} /></label>
               <label><strong>其他视频每秒</strong><input type="number" min={0} max={1000000} value={pricing.videoDefaultCredits} onChange={(event) => setPricing({ ...pricing, videoDefaultCredits: event.target.value })} /></label>
             </div>

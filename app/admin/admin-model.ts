@@ -148,6 +148,7 @@ export type AdminVideoModelPrice = {
 export type AdminAiPricing = {
   agentRequestCredits: string;
   inspirationAnalysisCredits: string;
+  canvasTextAgentCredits: string;
   imageDefaultCredits: string;
   videoDefaultCredits: string;
   imageModels: AdminImageModelPrice[];
@@ -416,7 +417,12 @@ export const normalizePricing = (pricing: AdminAiPricing): AdminAiPricing => {
   const videoModels = knownVideoModels.map((model) => (
     videoMap.get(modelToken(model)) || { model, credits: pricing.videoDefaultCredits }
   ));
-  return { ...pricing, imageModels, videoModels };
+  return {
+    ...pricing,
+    canvasTextAgentCredits: pricing.canvasTextAgentCredits ?? "1",
+    imageModels,
+    videoModels,
+  };
 };
 
 export const videoPricingDraft = (item: Partial<AdminVideoModelPrice> = {}): VideoPricingDraft => ({
