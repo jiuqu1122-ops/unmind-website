@@ -71,6 +71,9 @@ const operationKey = (prefix: string) => (
 );
 
 const creditPattern = /^(?:0|[1-9]\d{0,6})$/;
+const membershipPricePattern = /^(?:0|[1-9]\d{0,15})(?:\.\d{1,6})?$/;
+type MembershipPriceKey = "image1K" | "image2K" | "image4K" | "videoPerSecond" | "videoPerVideo" | "agentRequest" | "canvasTextAgent" | "workflow" | "inspirationAnalysis";
+type MembershipCustomPrice = { id: string; key: string; label: string; value: string };
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => ({})) as { message?: string };
@@ -106,7 +109,18 @@ export function AdminConsole() {
   const [referralRules, setReferralRules] = useState<AdminReferralRule[]>([]);
   const [membershipCode, setMembershipCode] = useState("pro");
   const [membershipName, setMembershipName] = useState("Pro");
-  const [membershipPrices, setMembershipPrices] = useState('{"image1K":"1"}');
+  const [membershipPriceDraft, setMembershipPriceDraft] = useState<Record<MembershipPriceKey, string>>({
+    image1K: "",
+    image2K: "",
+    image4K: "",
+    videoPerSecond: "",
+    videoPerVideo: "",
+    agentRequest: "",
+    canvasTextAgent: "",
+    workflow: "",
+    inspirationAnalysis: "",
+  });
+  const [membershipCustomPrices, setMembershipCustomPrices] = useState<MembershipCustomPrice[]>([]);
   const [membershipDays, setMembershipDays] = useState("30");
   const [membershipGrantPlan, setMembershipGrantPlan] = useState("");
   const [ruleInviterCredits, setRuleInviterCredits] = useState("100");
@@ -228,10 +242,57 @@ export function AdminConsole() {
     ));
   };
 
+  const updateMembershipPrice = (key: MembershipPriceKey, value: string) => {
+    setMembershipPriceDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const addMembershipCustomPrice = () => {
+    setMembershipCustomPrices((current) => ([
+      ...current,
+      { id: crypto.randomUUID(), key: "", label: "", value: "" },
+    ]));
+  };
+
+  const updateMembershipCustomPrice = (id: string, field: "key" | "label" | "value", value: string) => {
+    setMembershipCustomPrices((current) => current.map((item) => (
+      item.id === id ? { ...item, [field]: value } : item
+    )));
+  };
+
+  const removeMembershipCustomPrice = (id: string) => {
+    setMembershipCustomPrices((current) => current.filter((item) => item.id !== id));
+  };
+
+  const buildMembershipPrices = () => {
+    const prices: Record<string, unknown> = {};
+    (Object.keys(membershipPriceDraft) as MembershipPriceKey[]).forEach((key) => {
+      const value = membershipPriceDraft[key].trim();
+      if (!value) return;
+      if (!membershipPricePattern.test(value)) {
+        throw new Error(`价格项“${key}”必须是非负数字，最多 6 位小数`);
+      }
+      prices[key] = value;
+    });
+    for (const item of membershipCustomPrices) {
+      const key = item.key.trim();
+      const value = item.value.trim();
+      if (!key && !item.label.trim() && !value) continue;
+      if (!/^[A-Za-z][A-Za-z0-9_.-]{1,63}$/.test(key)) {
+        throw new Error("自定义价格项的键名需以字母开头，且只能包含字母、数字、下划线、点或短横线");
+      }
+      if (!value || !membershipPricePattern.test(value)) {
+        throw new Error(`价格项“${item.label.trim() || key}”必须是非负数字，最多 6 位小数`);
+      }
+      prices[key] = value;
+    }
+    if (!Object.keys(prices).length) throw new Error("请至少填写一项会员价格");
+    return prices;
+  };
+
   const createMembership = async (event: FormEvent) => {
     event.preventDefault();
     let prices: Record<string, unknown>;
-    try { prices = JSON.parse(membershipPrices) as Record<string, unknown>; } catch { setError("会员价格 JSON 格式无效"); return; }
+    try { prices = buildMembershipPrices(); } catch (reason) { setError(reason instanceof Error ? reason.message : "会员价格填写无效"); return; }
     setBusy(true); clearMessage();
     try {
       await request("/v1/admin/membership/plans", { method: "POST", body: JSON.stringify({ code: membershipCode, name: membershipName, prices }) });
@@ -903,7 +964,14 @@ export function AdminConsole() {
                     当前会员：{selectedUser.membership?.plan.name || "普通用户"} · 会员到期：{selectedUser.membership ? formatDateTime(selectedUser.membership.expiresAt) : "无会员期限"}
                   </div>
                   <div className={styles.formGrid}>
-                    <label><strong>会员计划</strong><select value={membershipGrantPlan} onChange={(event) => setMembershipGrantPlan(event.target.value)} disabled={!membershipPlans.length}>{membershipPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
+                    {membershipPlans.length ? (
+                      <label><strong>会员计划</strong><select value={membershipGrantPlan} onChange={(event) => setMembershipGrantPlan(event.target.value)}>{membershipPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
+                    ) : (
+                      <div className={styles.fieldHint}>
+                        暂无可分配的会员计划，请先创建计划。
+                        <button type="button" className={styles.ghost} onClick={() => { setTab("membership"); void refreshMembership(); }}>去创建会员计划</button>
+                      </div>
+                    )}
                     <label><strong>有效天数</strong><input type="number" min={1} max={3650} value={membershipDays} onChange={(event) => setMembershipDays(event.target.value)} /></label>
                   </div>
                   <div className={styles.actionRow}>
@@ -956,7 +1024,29 @@ export function AdminConsole() {
             <form className={styles.form} onSubmit={createMembership}>
               <label><strong>计划编码</strong><input value={membershipCode} onChange={(event) => setMembershipCode(event.target.value)} placeholder="pro" /></label>
               <label><strong>显示名称</strong><input value={membershipName} onChange={(event) => setMembershipName(event.target.value)} placeholder="Pro" /></label>
-              <label><strong>价格 JSON</strong><textarea value={membershipPrices} onChange={(event) => setMembershipPrices(event.target.value)} rows={5} placeholder='{"image1K":"1","video":"10"}' /></label>
+              <div className={styles.membershipPriceEditor}>
+                <div className={styles.fieldHint}>只填写你要覆盖的价格，留空则沿用普通用户价格。单位均为积分。</div>
+                <div className={styles.membershipPriceGrid}>
+                  <label><strong>图片 1K / 张</strong><input inputMode="decimal" value={membershipPriceDraft.image1K} onChange={(event) => updateMembershipPrice("image1K", event.target.value)} placeholder="例如 1" /></label>
+                  <label><strong>图片 2K / 张</strong><input inputMode="decimal" value={membershipPriceDraft.image2K} onChange={(event) => updateMembershipPrice("image2K", event.target.value)} placeholder="例如 2" /></label>
+                  <label><strong>图片 4K / 张</strong><input inputMode="decimal" value={membershipPriceDraft.image4K} onChange={(event) => updateMembershipPrice("image4K", event.target.value)} placeholder="例如 4" /></label>
+                  <label><strong>视频 / 秒</strong><input inputMode="decimal" value={membershipPriceDraft.videoPerSecond} onChange={(event) => updateMembershipPrice("videoPerSecond", event.target.value)} placeholder="例如 1" /></label>
+                  <label><strong>视频 / 个（整段）</strong><input inputMode="decimal" value={membershipPriceDraft.videoPerVideo} onChange={(event) => updateMembershipPrice("videoPerVideo", event.target.value)} placeholder="例如 10" /></label>
+                  <label><strong>Agent 普通请求 / 次</strong><input inputMode="decimal" value={membershipPriceDraft.agentRequest} onChange={(event) => updateMembershipPrice("agentRequest", event.target.value)} placeholder="仅请求计费模型" /></label>
+                  <label><strong>画布文本节点 / 次</strong><input inputMode="decimal" value={membershipPriceDraft.canvasTextAgent} onChange={(event) => updateMembershipPrice("canvasTextAgent", event.target.value)} placeholder="例如 1" /></label>
+                  <label><strong>工作流文本节点 / 次</strong><input inputMode="decimal" value={membershipPriceDraft.workflow} onChange={(event) => updateMembershipPrice("workflow", event.target.value)} placeholder="例如 1" /></label>
+                  <label><strong>灵感分析 / 次</strong><input inputMode="decimal" value={membershipPriceDraft.inspirationAnalysis} onChange={(event) => updateMembershipPrice("inspirationAnalysis", event.target.value)} placeholder="例如 0" /></label>
+                </div>
+                <div className={styles.customPriceHeader}><strong>其它价格项</strong><button type="button" className={styles.ghost} onClick={addMembershipCustomPrice}>添加价格项</button></div>
+                {membershipCustomPrices.map((item) => (
+                  <div className={styles.customPriceRow} key={item.id}>
+                    <input value={item.label} onChange={(event) => updateMembershipCustomPrice(item.id, "label", event.target.value)} placeholder="显示名称，例如：高清修复" />
+                    <input value={item.key} onChange={(event) => updateMembershipCustomPrice(item.id, "key", event.target.value)} placeholder="键名，例如 hdEnhance" />
+                    <input inputMode="decimal" value={item.value} onChange={(event) => updateMembershipCustomPrice(item.id, "value", event.target.value)} placeholder="积分" />
+                    <button type="button" className={styles.danger} onClick={() => removeMembershipCustomPrice(item.id)}>删除</button>
+                  </div>
+                ))}
+              </div>
               <button disabled={busy}>保存会员计划</button>
             </form>
             <div className={styles.codeList}>

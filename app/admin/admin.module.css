@@ -41,6 +41,17 @@
 .balance small { color: #a8bad8; }
 .balance strong { font-size: 28px; }
 .formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.membershipPriceEditor { display: grid; gap: 12px; }
+.membershipPriceGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.membershipPriceGrid label { display: grid; gap: 7px; color: #4e5b70; font-size: 11px; }
+.membershipPriceGrid input { width: 100%; min-height: 40px; padding: 0 11px; border: 1px solid #d9e1ee; border-radius: 10px; outline: none; background: #f9fbff; color: #172033; font: inherit; }
+.membershipPriceGrid input:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
+.customPriceHeader { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 6px; border-top: 1px solid #edf0f5; color: #4e5b70; font-size: 11px; }
+.customPriceHeader button { min-height: 32px; padding: 0 10px; font-size: 10px; }
+.customPriceRow { display: grid; grid-template-columns: 1fr 1fr .7fr auto; gap: 7px; }
+.customPriceRow input { width: 100%; min-width: 0; min-height: 36px; padding: 0 9px; border: 1px solid #d9e1ee; border-radius: 9px; outline: none; background: #f9fbff; color: #172033; font: inherit; font-size: 10px; }
+.customPriceRow input:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
+.customPriceRow button { min-height: 36px; padding: 0 10px; font-size: 10px; }
 .generated { padding: 14px; border-radius: 14px; background: #f1f6ff; }
 .generated pre { max-height: 190px; overflow: auto; color: #1d4fae; font-size: 11px; line-height: 1.7; white-space: pre-wrap; }
 .generated button { width: 100%; }
@@ -170,7 +181,8 @@
   .panel { min-height: 0; }
   .loginCard { padding: 26px 20px; }
   .walletGrid { grid-template-columns: repeat(2,1fr); }
-  .formGridThree,.formGrid,.basePricingGrid,.advancedGrid { grid-template-columns: 1fr; }
+  .formGridThree,.formGrid,.basePricingGrid,.advancedGrid,.membershipPriceGrid { grid-template-columns: 1fr; }
+  .customPriceRow { grid-template-columns: 1fr; }
   .imagePricingList article { grid-template-columns: 1fr 1fr; }
   .imagePricingList article > strong { grid-column: 1 / -1; padding-bottom: 0; }
   .videoPriceHead { grid-template-columns: 1fr; }
