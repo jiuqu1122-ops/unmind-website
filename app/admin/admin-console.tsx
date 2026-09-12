@@ -16,12 +16,14 @@ import {
   type AdminChatPricing,
   type AdminChatTokenRates,
   type AdminLedgerEntry,
+  type AdminMembershipPlan,
   type AdminOverview,
   type AdminProvider,
   type AdminProviderCapability,
   type AdminProviderKind,
   type AdminUser,
   type AdminUserDetail,
+  type AdminReferralRule,
   type ProviderBalance,
   type ProviderDraft,
   type RedemptionCode,
@@ -31,7 +33,7 @@ import {
 import { AiModelCenter } from "./ai-model-center";
 import styles from "./admin.module.css";
 
-type Tab = "users" | "codes" | "providers" | "models" | "pricing" | "reviews";
+type Tab = "users" | "membership" | "codes" | "providers" | "models" | "pricing" | "reviews";
 type AuthorizationStatus = "ACTIVE" | "SUSPENDED" | "DISABLED";
 
 const formatCredits = (value?: string | null) => {
@@ -101,6 +103,15 @@ export function AdminConsole() {
   const [providerBalance, setProviderBalance] = useState<ProviderBalance | null>(null);
   const [pricing, setPricing] = useState<AdminAiPricing | null>(null);
   const [chatPricing, setChatPricing] = useState<AdminChatPricing | null>(null);
+  const [membershipPlans, setMembershipPlans] = useState<AdminMembershipPlan[]>([]);
+  const [referralRules, setReferralRules] = useState<AdminReferralRule[]>([]);
+  const [membershipCode, setMembershipCode] = useState("pro");
+  const [membershipName, setMembershipName] = useState("Pro");
+  const [membershipPrices, setMembershipPrices] = useState('{"image1K":"1"}');
+  const [membershipDays, setMembershipDays] = useState("30");
+  const [membershipGrantPlan, setMembershipGrantPlan] = useState("");
+  const [ruleInviterCredits, setRuleInviterCredits] = useState("100");
+  const [ruleInviteeCredits, setRuleInviteeCredits] = useState("100");
   const [videoAdvanced, setVideoAdvanced] = useState<Record<number, VideoPricingDraft>>({});
   const [tab, setTab] = useState<Tab>("users");
   const [query, setQuery] = useState("");
@@ -197,6 +208,48 @@ export function AdminConsole() {
     return page.items;
   };
 
+  const refreshMembership = async () => {
+    const [plans, rules] = await Promise.all([
+      request<{ items: AdminMembershipPlan[] }>("/v1/admin/membership/plans"),
+      request<{ items: AdminReferralRule[] }>("/v1/admin/referral-rules"),
+    ]);
+    setMembershipPlans(plans.items);
+    setReferralRules(rules.items);
+    if (!membershipGrantPlan && plans.items[0]) setMembershipGrantPlan(plans.items[0].id);
+  };
+
+  const createMembership = async (event: FormEvent) => {
+    event.preventDefault();
+    let prices: Record<string, unknown>;
+    try { prices = JSON.parse(membershipPrices) as Record<string, unknown>; } catch { setError("会员价格 JSON 格式无效"); return; }
+    setBusy(true); clearMessage();
+    try {
+      await request("/v1/admin/membership/plans", { method: "POST", body: JSON.stringify({ code: membershipCode, name: membershipName, prices }) });
+      await refreshMembership();
+      setNotice("会员计划已保存");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "会员计划保存失败"); }
+    finally { setBusy(false); }
+  };
+
+  const saveReferralRule = async (event: FormEvent) => {
+    event.preventDefault(); setBusy(true); clearMessage();
+    try {
+      await request("/v1/admin/referral-rules", { method: "PATCH", body: JSON.stringify({ eventType: "REGISTRATION", inviterCredits: ruleInviterCredits, inviteeCredits: ruleInviteeCredits, active: true }) });
+      await refreshMembership(); setNotice("邀请奖励规则已更新");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "邀请规则更新失败"); }
+    finally { setBusy(false); }
+  };
+
+  const grantSelectedMembership = async (event: FormEvent) => {
+    event.preventDefault(); if (!selectedUser || !membershipGrantPlan) return;
+    setBusy(true); clearMessage();
+    try {
+      await request(`/v1/admin/users/${encodeURIComponent(selectedUser.id)}/membership/grant`, { method: "POST", body: JSON.stringify({ planId: membershipGrantPlan, days: Number(membershipDays) }) });
+      await Promise.all([refreshUsers(), openUser(selectedUser.id), refreshMembership()]); setNotice("会员已分配");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "会员分配失败"); }
+    finally { setBusy(false); }
+  };
+
   const connect = async (event: FormEvent) => {
     event.preventDefault();
     const credential = adminKeyInput.trim();
@@ -269,7 +322,7 @@ export function AdminConsole() {
   const updateAuthorization = async (event: FormEvent) => {
     event.preventDefault();
     if (!selectedUser) return;
-    if (authorizationName.trim().length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(authorizationExpiresAt)) {
+    if (authorizationName.trim().length < 2) {
       setError("用户名至少 2 个字符，并请选择有效的到期日期");
       return;
     }
@@ -282,7 +335,7 @@ export function AdminConsole() {
           method: "PATCH",
           body: JSON.stringify({
             displayName: authorizationName.trim(),
-            expiresAt: authorizationExpiresAt,
+            ...(authorizationExpiresAt ? { expiresAt: authorizationExpiresAt } : {}),
             status: authorizationStatus,
             idempotencyKey: operationKey("web-authorization"),
           }),
@@ -756,6 +809,7 @@ export function AdminConsole() {
         <button className={tab === "models" ? styles.active : ""} onClick={() => setTab("models")}>AI Model Center</button>
         <button className={tab === "pricing" ? styles.active : ""} onClick={() => setTab("pricing")}>AI 定价（含文字节点）</button>
         <button className={tab === "reviews" ? styles.active : ""} onClick={() => setTab("reviews")}>灵感空间审核</button>
+      <button className={tab === "membership" ? styles.active : ""} onClick={() => { setTab("membership"); void refreshMembership().catch((reason) => setError(reason instanceof Error ? reason.message : "会员配置加载失败")); }}>会员与邀请</button>
       </nav>
 
       {(error || notice) && <div className={error ? styles.error : styles.notice}>{error || notice}</div>}
@@ -781,6 +835,9 @@ export function AdminConsole() {
             {selectedUser ? (
               <div className={styles.detailStack}>
                 <div className={styles.panelTitle}><strong>{selectedUser.displayName || selectedUser.email || selectedUser.id}</strong><span>{selectedUser.status}</span></div>
+                <div className={styles.notice}>
+                  会员：{selectedUser.membership?.plan.name || "普通用户"} · 到期：{formatDateTime(selectedUser.membership?.expiresAt)} · 邀请码：{selectedUser.referral?.inviteCode || "未生成"}
+                </div>
                 <div className={styles.walletGrid}>
                   <article><small>可用</small><strong>{formatCredits(selectedUser.wallet?.availableCredits)}</strong></article>
                   <article><small>预留</small><strong>{formatCredits(selectedUser.wallet?.reservedCredits)}</strong></article>
@@ -829,6 +886,42 @@ export function AdminConsole() {
                 </div>
               </div>
             ) : <p className={styles.empty}>从左侧选择用户</p>}
+          </section>
+        </div>
+      )}
+
+      {tab === "membership" && (
+        <div className={styles.twoColumns}>
+          <section className={styles.panel}>
+            <div className={styles.panelTitle}><strong>会员计划</strong><span>{membershipPlans.length} 个计划</span></div>
+            <form className={styles.form} onSubmit={createMembership}>
+              <label><strong>计划编码</strong><input value={membershipCode} onChange={(event) => setMembershipCode(event.target.value)} placeholder="pro" /></label>
+              <label><strong>显示名称</strong><input value={membershipName} onChange={(event) => setMembershipName(event.target.value)} placeholder="Pro" /></label>
+              <label><strong>价格 JSON</strong><textarea value={membershipPrices} onChange={(event) => setMembershipPrices(event.target.value)} rows={5} placeholder='{"image1K":"1","video":"10"}' /></label>
+              <button disabled={busy}>保存会员计划</button>
+            </form>
+            <div className={styles.codeList}>
+              {membershipPlans.map((plan) => <article key={plan.id}><strong>{plan.name}（{plan.code}）</strong><small>{plan.memberCount} 位会员 · {plan.active ? "启用" : "停用"}</small></article>)}
+              {!membershipPlans.length && <p className={styles.empty}>暂无会员计划，请先创建</p>}
+            </div>
+          </section>
+          <section className={styles.panel}>
+            <div className={styles.panelTitle}><strong>邀请奖励规则</strong><span>注册与充值可分别配置</span></div>
+            <form className={styles.form} onSubmit={saveReferralRule}>
+              <label><strong>邀请人奖励积分</strong><input inputMode="decimal" value={ruleInviterCredits} onChange={(event) => setRuleInviterCredits(event.target.value)} /></label>
+              <label><strong>新用户奖励积分</strong><input inputMode="decimal" value={ruleInviteeCredits} onChange={(event) => setRuleInviteeCredits(event.target.value)} /></label>
+              <button disabled={busy}>保存注册奖励</button>
+            </form>
+            <div className={styles.codeList}>
+              {referralRules.map((rule) => <article key={rule.id}><strong>{rule.eventType}</strong><small>邀请人 {rule.inviterCredits} · 新用户 {rule.inviteeCredits} · {rule.active ? "启用" : "停用"}</small></article>)}
+              {!referralRules.length && <p className={styles.empty}>暂无邀请规则</p>}
+            </div>
+            {selectedUser && <form className={styles.form} onSubmit={grantSelectedMembership}>
+              <div className={styles.sectionTitle}>给当前用户分配会员</div>
+              <label><strong>会员计划</strong><select value={membershipGrantPlan} onChange={(event) => setMembershipGrantPlan(event.target.value)}>{membershipPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
+              <label><strong>有效天数</strong><input type="number" min={1} max={3650} value={membershipDays} onChange={(event) => setMembershipDays(event.target.value)} /></label>
+              <button disabled={busy || !membershipGrantPlan}>分配会员</button>
+            </form>}
           </section>
         </div>
       )}

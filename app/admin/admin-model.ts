@@ -43,6 +43,8 @@ export type AdminUser = {
   status: string;
   wallet: Wallet | null;
   license?: AdminLicense | null;
+  membership?: { id: string; status: string; startsAt: string; expiresAt: string; plan: { id: string; code: string; name: string } } | null;
+  referral?: { inviteCode: string } | null;
   updatedAt: string;
 };
 
@@ -423,6 +425,25 @@ export const normalizePricing = (pricing: AdminAiPricing): AdminAiPricing => {
     imageModels,
     videoModels,
   };
+};
+
+export type AdminMembershipPlan = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  active: boolean;
+  memberCount: number;
+  versions: Array<{ id: string; version: number; prices: Record<string, unknown>; freeQuota: Record<string, unknown> | null; publishedAt: string }>;
+};
+
+export type AdminReferralRule = {
+  id: string;
+  eventType: string;
+  inviterCredits: string;
+  inviteeCredits: string;
+  minRecharge: string | null;
+  active: boolean;
 };
 
 export const videoPricingDraft = (item: Partial<AdminVideoModelPrice> = {}): VideoPricingDraft => ({
