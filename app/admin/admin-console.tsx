@@ -90,7 +90,6 @@ export function AdminConsole() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
   const [authorizationName, setAuthorizationName] = useState("");
-  const [authorizationExpiresAt, setAuthorizationExpiresAt] = useState("");
   const [authorizationStatus, setAuthorizationStatus] = useState<AuthorizationStatus>("ACTIVE");
   const [codes, setCodes] = useState<RedemptionCode[]>([]);
   const [reviews, setReviews] = useState<ReviewShare[]>([]);
@@ -208,6 +207,15 @@ export function AdminConsole() {
     return page.items;
   };
 
+  const refreshMembershipPlans = async () => {
+    const plans = await request<{ items: AdminMembershipPlan[] }>("/v1/admin/membership/plans");
+    setMembershipPlans(plans.items);
+    setMembershipGrantPlan((current) => (
+      plans.items.some((plan) => plan.id === current) ? current : plans.items[0]?.id || ""
+    ));
+    return plans.items;
+  };
+
   const refreshMembership = async () => {
     const [plans, rules] = await Promise.all([
       request<{ items: AdminMembershipPlan[] }>("/v1/admin/membership/plans"),
@@ -215,7 +223,9 @@ export function AdminConsole() {
     ]);
     setMembershipPlans(plans.items);
     setReferralRules(rules.items);
-    if (!membershipGrantPlan && plans.items[0]) setMembershipGrantPlan(plans.items[0].id);
+    setMembershipGrantPlan((current) => (
+      plans.items.some((plan) => plan.id === current) ? current : plans.items[0]?.id || ""
+    ));
   };
 
   const createMembership = async (event: FormEvent) => {
@@ -242,11 +252,49 @@ export function AdminConsole() {
 
   const grantSelectedMembership = async (event: FormEvent) => {
     event.preventDefault(); if (!selectedUser || !membershipGrantPlan) return;
+    const days = Number(membershipDays);
+    if (!Number.isInteger(days) || days < 1 || days > 3650) {
+      setError("会员有效天数必须是 1 到 3650 之间的整数");
+      return;
+    }
     setBusy(true); clearMessage();
     try {
-      await request(`/v1/admin/users/${encodeURIComponent(selectedUser.id)}/membership/grant`, { method: "POST", body: JSON.stringify({ planId: membershipGrantPlan, days: Number(membershipDays) }) });
+      await request(`/v1/admin/users/${encodeURIComponent(selectedUser.id)}/membership/grant`, {
+        method: "POST",
+        body: JSON.stringify({ planId: membershipGrantPlan, days }),
+      });
       await Promise.all([refreshUsers(), openUser(selectedUser.id), refreshMembership()]); setNotice("会员已分配");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "会员分配失败"); }
+    finally { setBusy(false); }
+  };
+
+  const extendSelectedMembership = async () => {
+    if (!selectedUser) return;
+    const days = Number(membershipDays);
+    if (!Number.isInteger(days) || days < 1 || days > 3650) {
+      setError("会员有效天数必须是 1 到 3650 之间的整数");
+      return;
+    }
+    setBusy(true); clearMessage();
+    try {
+      await request(`/v1/admin/users/${encodeURIComponent(selectedUser.id)}/membership/extend`, {
+        method: "POST",
+        body: JSON.stringify({ days, ...(membershipGrantPlan ? { planId: membershipGrantPlan } : {}) }),
+      });
+      await Promise.all([refreshUsers(), openUser(selectedUser.id), refreshMembershipPlans()]);
+      setNotice("会员期限已延长");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "会员延期失败"); }
+    finally { setBusy(false); }
+  };
+
+  const revokeSelectedMembership = async () => {
+    if (!selectedUser || !window.confirm("确定撤销该用户当前会员吗？")) return;
+    setBusy(true); clearMessage();
+    try {
+      await request(`/v1/admin/users/${encodeURIComponent(selectedUser.id)}/membership/revoke`, { method: "POST" });
+      await Promise.all([refreshUsers(), openUser(selectedUser.id), refreshMembershipPlans()]);
+      setNotice("会员已撤销");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "会员撤销失败"); }
     finally { setBusy(false); }
   };
 
@@ -306,9 +354,7 @@ export function AdminConsole() {
       const detail = await request<AdminUserDetail>(`/v1/admin/users/${encodeURIComponent(userId)}`);
       setSelectedUser(detail);
       setAuthorizationName(detail.displayName || detail.licenses[0]?.customer || "");
-      setAuthorizationExpiresAt(
-        detail.entitlementExpiresAt?.slice(0, 10) || detail.licenses[0]?.expiresAt?.slice(0, 10) || "",
-      );
+      if (!membershipPlans.length) await refreshMembershipPlans();
       setAuthorizationStatus(
         (["ACTIVE", "SUSPENDED", "DISABLED"].includes(detail.status) ? detail.status : "ACTIVE") as AuthorizationStatus,
       );
@@ -335,7 +381,6 @@ export function AdminConsole() {
           method: "PATCH",
           body: JSON.stringify({
             displayName: authorizationName.trim(),
-            ...(authorizationExpiresAt ? { expiresAt: authorizationExpiresAt } : {}),
             status: authorizationStatus,
             idempotencyKey: operationKey("web-authorization"),
           }),
@@ -836,7 +881,7 @@ export function AdminConsole() {
               <div className={styles.detailStack}>
                 <div className={styles.panelTitle}><strong>{selectedUser.displayName || selectedUser.email || selectedUser.id}</strong><span>{selectedUser.status}</span></div>
                 <div className={styles.notice}>
-                  会员：{selectedUser.membership?.plan.name || "普通用户"} · 到期：{formatDateTime(selectedUser.membership?.expiresAt)} · 邀请码：{selectedUser.referral?.inviteCode || "未生成"}
+                  会员：{selectedUser.membership?.plan.name || "普通用户"} · 会员到期：{selectedUser.membership ? formatDateTime(selectedUser.membership.expiresAt) : "无会员期限"} · 邀请码：{selectedUser.referral?.inviteCode || "未生成"}
                 </div>
                 <div className={styles.walletGrid}>
                   <article><small>可用</small><strong>{formatCredits(selectedUser.wallet?.availableCredits)}</strong></article>
@@ -846,12 +891,26 @@ export function AdminConsole() {
                 </div>
                 <form className={styles.compactForm} onSubmit={updateAuthorization}>
                   <div className={styles.sectionTitle}>账户授权</div>
-                  <div className={styles.formGridThree}>
+                  <div className={styles.formGrid}>
                     <label><strong>用户名称</strong><input value={authorizationName} onChange={(event) => setAuthorizationName(event.target.value)} maxLength={32} /></label>
-                    <label><strong>到期日期</strong><input type="date" value={authorizationExpiresAt} onChange={(event) => setAuthorizationExpiresAt(event.target.value)} /></label>
                     <label><strong>账户状态</strong><select value={authorizationStatus} onChange={(event) => setAuthorizationStatus(event.target.value as AuthorizationStatus)}><option value="ACTIVE">启用</option><option value="SUSPENDED">暂停</option><option value="DISABLED">禁用</option></select></label>
                   </div>
                   <button disabled={busy}>保存授权</button>
+                </form>
+                <form className={styles.compactForm} onSubmit={grantSelectedMembership}>
+                  <div className={styles.sectionTitle}>会员管理</div>
+                  <div className={styles.notice}>
+                    当前会员：{selectedUser.membership?.plan.name || "普通用户"} · 会员到期：{selectedUser.membership ? formatDateTime(selectedUser.membership.expiresAt) : "无会员期限"}
+                  </div>
+                  <div className={styles.formGrid}>
+                    <label><strong>会员计划</strong><select value={membershipGrantPlan} onChange={(event) => setMembershipGrantPlan(event.target.value)} disabled={!membershipPlans.length}>{membershipPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
+                    <label><strong>有效天数</strong><input type="number" min={1} max={3650} value={membershipDays} onChange={(event) => setMembershipDays(event.target.value)} /></label>
+                  </div>
+                  <div className={styles.actionRow}>
+                    <button disabled={busy || !membershipGrantPlan}>分配会员</button>
+                    <button type="button" className={styles.ghost} disabled={busy || !membershipGrantPlan} onClick={() => void extendSelectedMembership()}>延长会员</button>
+                    {selectedUser.membership && <button type="button" className={styles.danger} disabled={busy} onClick={() => void revokeSelectedMembership()}>撤销会员</button>}
+                  </div>
                 </form>
                 <form className={styles.compactForm} onSubmit={grantCredits}>
                   <div className={styles.sectionTitle}>发放额度</div>
@@ -916,12 +975,6 @@ export function AdminConsole() {
               {referralRules.map((rule) => <article key={rule.id}><strong>{rule.eventType}</strong><small>邀请人 {rule.inviterCredits} · 新用户 {rule.inviteeCredits} · {rule.active ? "启用" : "停用"}</small></article>)}
               {!referralRules.length && <p className={styles.empty}>暂无邀请规则</p>}
             </div>
-            {selectedUser && <form className={styles.form} onSubmit={grantSelectedMembership}>
-              <div className={styles.sectionTitle}>给当前用户分配会员</div>
-              <label><strong>会员计划</strong><select value={membershipGrantPlan} onChange={(event) => setMembershipGrantPlan(event.target.value)}>{membershipPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
-              <label><strong>有效天数</strong><input type="number" min={1} max={3650} value={membershipDays} onChange={(event) => setMembershipDays(event.target.value)} /></label>
-              <button disabled={busy || !membershipGrantPlan}>分配会员</button>
-            </form>}
           </section>
         </div>
       )}
