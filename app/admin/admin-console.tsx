@@ -31,6 +31,7 @@ import {
   type VideoPricingDraft,
 } from "./admin-model";
 import { AiModelCenter } from "./ai-model-center";
+import type { AdminAiModelSummary } from "./ai-model-center-model";
 import styles from "./admin.module.css";
 
 type Tab = "users" | "membership" | "codes" | "providers" | "models" | "pricing" | "reviews";
@@ -71,9 +72,25 @@ const operationKey = (prefix: string) => (
 );
 
 const creditPattern = /^(?:0|[1-9]\d{0,6})$/;
-const membershipPricePattern = /^(?:0|[1-9]\d{0,15})(?:\.\d{1,6})?$/;
-type MembershipPriceKey = "image1K" | "image2K" | "image4K" | "videoPerSecond" | "videoPerVideo" | "agentRequest" | "canvasTextAgent" | "workflow" | "inspirationAnalysis";
-type MembershipCustomPrice = { id: string; key: string; label: string; value: string };
+const membershipDiscountPattern = /^(?:0|[1-9](?:\.\d{1,2})?|10(?:\.0{1,2})?)$/;
+type MembershipDiscountKey = "gptImage1K" | "chat" | "video" | "other";
+type MembershipDiscountDraft = Record<MembershipDiscountKey, string>;
+
+const emptyMembershipDiscounts = (): MembershipDiscountDraft => ({
+  gptImage1K: "10",
+  chat: "10",
+  video: "10",
+  other: "10",
+});
+
+const gptImageModel = (model: AdminAiModelSummary) => (
+  model.modality === "image"
+  && (model.canonicalModelKey.toLowerCase().includes("gpt")
+    || model.canonicalModelKey.toLowerCase() === "image2"
+    || model.displayName.toLowerCase().includes("gpt image"))
+  && Array.isArray(model.capabilities.supportedResolutions)
+  && model.capabilities.supportedResolutions.some((value) => String(value).toLowerCase() === "1k")
+);
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => ({})) as { message?: string };
@@ -106,25 +123,20 @@ export function AdminConsole() {
   const [pricing, setPricing] = useState<AdminAiPricing | null>(null);
   const [chatPricing, setChatPricing] = useState<AdminChatPricing | null>(null);
   const [membershipPlans, setMembershipPlans] = useState<AdminMembershipPlan[]>([]);
+  const [membershipModels, setMembershipModels] = useState<AdminAiModelSummary[]>([]);
   const [referralRules, setReferralRules] = useState<AdminReferralRule[]>([]);
+  const [membershipEditingPlanId, setMembershipEditingPlanId] = useState<string | null>(null);
+  const [membershipLegacyPrices, setMembershipLegacyPrices] = useState<Record<string, unknown>>({});
   const [membershipCode, setMembershipCode] = useState("pro");
   const [membershipName, setMembershipName] = useState("Pro");
-  const [membershipPriceDraft, setMembershipPriceDraft] = useState<Record<MembershipPriceKey, string>>({
-    image1K: "",
-    image2K: "",
-    image4K: "",
-    videoPerSecond: "",
-    videoPerVideo: "",
-    agentRequest: "",
-    canvasTextAgent: "",
-    workflow: "",
-    inspirationAnalysis: "",
-  });
-  const [membershipCustomPrices, setMembershipCustomPrices] = useState<MembershipCustomPrice[]>([]);
+  const [membershipDiscountDraft, setMembershipDiscountDraft] = useState<MembershipDiscountDraft>(() => emptyMembershipDiscounts());
   const [membershipDays, setMembershipDays] = useState("30");
   const [membershipGrantPlan, setMembershipGrantPlan] = useState("");
   const [ruleInviterCredits, setRuleInviterCredits] = useState("100");
   const [ruleInviteeCredits, setRuleInviteeCredits] = useState("100");
+  const [ruleRechargeInviterCredits, setRuleRechargeInviterCredits] = useState("0");
+  const [ruleRechargeInviteeCredits, setRuleRechargeInviteeCredits] = useState("0");
+  const [ruleRechargeMin, setRuleRechargeMin] = useState("0");
   const [videoAdvanced, setVideoAdvanced] = useState<Record<number, VideoPricingDraft>>({});
   const [tab, setTab] = useState<Tab>("users");
   const [query, setQuery] = useState("");
@@ -231,73 +243,97 @@ export function AdminConsole() {
   };
 
   const refreshMembership = async () => {
-    const [plans, rules] = await Promise.all([
+    const [plans, rules, models] = await Promise.all([
       request<{ items: AdminMembershipPlan[] }>("/v1/admin/membership/plans"),
       request<{ items: AdminReferralRule[] }>("/v1/admin/referral-rules"),
+      request<{ items: AdminAiModelSummary[] }>("/v1/admin/ai-models/").catch(() => ({ items: [] })),
     ]);
     setMembershipPlans(plans.items);
     setReferralRules(rules.items);
+    setMembershipModels(models.items);
     setMembershipGrantPlan((current) => (
       plans.items.some((plan) => plan.id === current) ? current : plans.items[0]?.id || ""
     ));
+    const registration = rules.items.find((rule) => rule.eventType === "REGISTRATION");
+    const recharge = rules.items.find((rule) => rule.eventType === "RECHARGE");
+    if (registration) {
+      setRuleInviterCredits(registration.inviterCredits);
+      setRuleInviteeCredits(registration.inviteeCredits);
+    }
+    if (recharge) {
+      setRuleRechargeInviterCredits(recharge.inviterCredits);
+      setRuleRechargeInviteeCredits(recharge.inviteeCredits);
+      setRuleRechargeMin(recharge.minRecharge || "0");
+    }
   };
 
-  const updateMembershipPrice = (key: MembershipPriceKey, value: string) => {
-    setMembershipPriceDraft((current) => ({ ...current, [key]: value }));
+  const resetMembershipForm = () => {
+    setMembershipEditingPlanId(null);
+    setMembershipCode("pro");
+    setMembershipName("Pro");
+    setMembershipDiscountDraft(emptyMembershipDiscounts());
+    setMembershipLegacyPrices({});
   };
 
-  const addMembershipCustomPrice = () => {
-    setMembershipCustomPrices((current) => ([
-      ...current,
-      { id: crypto.randomUUID(), key: "", label: "", value: "" },
-    ]));
+  const editMembershipPlan = (plan: AdminMembershipPlan) => {
+    const prices = plan.versions[0]?.prices;
+    const legacyPrices = prices
+      ? Object.fromEntries(Object.entries(prices).filter(([key]) => key !== "discounts"))
+      : {};
+    const discounts = prices && typeof prices.discounts === "object" && !Array.isArray(prices.discounts)
+      ? prices.discounts as Record<string, unknown>
+      : {};
+    const next = emptyMembershipDiscounts();
+    (Object.keys(next) as MembershipDiscountKey[]).forEach((key) => {
+      const value = discounts[key];
+      if (typeof value === "string" || typeof value === "number") next[key] = String(value);
+    });
+    setMembershipEditingPlanId(plan.id);
+    setMembershipCode(plan.code);
+    setMembershipName(plan.name);
+    setMembershipDiscountDraft(next);
+    setMembershipLegacyPrices(legacyPrices);
   };
 
-  const updateMembershipCustomPrice = (id: string, field: "key" | "label" | "value", value: string) => {
-    setMembershipCustomPrices((current) => current.map((item) => (
-      item.id === id ? { ...item, [field]: value } : item
-    )));
-  };
-
-  const removeMembershipCustomPrice = (id: string) => {
-    setMembershipCustomPrices((current) => current.filter((item) => item.id !== id));
+  const updateMembershipDiscount = (key: MembershipDiscountKey, value: string) => {
+    setMembershipDiscountDraft((current) => ({ ...current, [key]: value }));
   };
 
   const buildMembershipPrices = () => {
-    const prices: Record<string, unknown> = {};
-    (Object.keys(membershipPriceDraft) as MembershipPriceKey[]).forEach((key) => {
-      const value = membershipPriceDraft[key].trim();
-      if (!value) return;
-      if (!membershipPricePattern.test(value)) {
-        throw new Error(`价格项“${key}”必须是非负数字，最多 6 位小数`);
+    const discounts: Record<string, string> = {};
+    (Object.keys(membershipDiscountDraft) as MembershipDiscountKey[]).forEach((key) => {
+      const value = membershipDiscountDraft[key].trim() || "10";
+      if (!membershipDiscountPattern.test(value)) {
+        throw new Error(`“${key}”必须是 0 到 10 的折扣值（例如 5 表示 5 折，0 表示免费）`);
       }
-      prices[key] = value;
+      discounts[key] = value;
     });
-    for (const item of membershipCustomPrices) {
-      const key = item.key.trim();
-      const value = item.value.trim();
-      if (!key && !item.label.trim() && !value) continue;
-      if (!/^[A-Za-z][A-Za-z0-9_.-]{1,63}$/.test(key)) {
-        throw new Error("自定义价格项的键名需以字母开头，且只能包含字母、数字、下划线、点或短横线");
-      }
-      if (!value || !membershipPricePattern.test(value)) {
-        throw new Error(`价格项“${item.label.trim() || key}”必须是非负数字，最多 6 位小数`);
-      }
-      prices[key] = value;
-    }
-    if (!Object.keys(prices).length) throw new Error("请至少填写一项会员价格");
-    return prices;
+    return { ...membershipLegacyPrices, discounts };
   };
 
   const createMembership = async (event: FormEvent) => {
     event.preventDefault();
+    const matchingPlan = membershipPlans.find((plan) => plan.code.toLowerCase() === membershipCode.trim().toLowerCase());
+    const targetPlanId = membershipEditingPlanId || matchingPlan?.id || null;
+    const editing = Boolean(targetPlanId);
     let prices: Record<string, unknown>;
     try { prices = buildMembershipPrices(); } catch (reason) { setError(reason instanceof Error ? reason.message : "会员价格填写无效"); return; }
     setBusy(true); clearMessage();
     try {
-      await request("/v1/admin/membership/plans", { method: "POST", body: JSON.stringify({ code: membershipCode, name: membershipName, prices }) });
+      const path = targetPlanId
+        ? `/v1/admin/membership/plans/${encodeURIComponent(targetPlanId)}`
+        : "/v1/admin/membership/plans";
+      await request(path, {
+        method: targetPlanId ? "PATCH" : "POST",
+        body: JSON.stringify({
+          ...(targetPlanId ? {} : { code: membershipCode }),
+          name: membershipName,
+          prices,
+        }),
+      });
       await refreshMembership();
-      setNotice("会员计划已保存");
+      resetMembershipForm();
+      setNotice(editing ? "会员计划已更新" : "会员计划已创建");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "会员计划保存失败"); }
     finally { setBusy(false); }
   };
@@ -305,7 +341,22 @@ export function AdminConsole() {
   const saveReferralRule = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); clearMessage();
     try {
-      await request("/v1/admin/referral-rules", { method: "PATCH", body: JSON.stringify({ eventType: "REGISTRATION", inviterCredits: ruleInviterCredits, inviteeCredits: ruleInviteeCredits, active: true }) });
+      await Promise.all([
+        request("/v1/admin/referral-rules", {
+          method: "PATCH",
+          body: JSON.stringify({ eventType: "REGISTRATION", inviterCredits: ruleInviterCredits, inviteeCredits: ruleInviteeCredits, active: true }),
+        }),
+        request("/v1/admin/referral-rules", {
+          method: "PATCH",
+          body: JSON.stringify({
+            eventType: "RECHARGE",
+            inviterCredits: ruleRechargeInviterCredits,
+            inviteeCredits: ruleRechargeInviteeCredits,
+            minRecharge: ruleRechargeMin.trim() || null,
+            active: true,
+          }),
+        }),
+      ]);
       await refreshMembership(); setNotice("邀请奖励规则已更新");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "邀请规则更新失败"); }
     finally { setBusy(false); }
@@ -388,6 +439,10 @@ export function AdminConsole() {
     setCodes([]);
     setReviews([]);
     setProviders([]);
+    setMembershipPlans([]);
+    setMembershipModels([]);
+    setReferralRules([]);
+    resetMembershipForm();
     setPricing(null);
     setChatPricing(null);
     setProviderDraft(newProviderDraft());
@@ -1020,49 +1075,55 @@ export function AdminConsole() {
       {tab === "membership" && (
         <div className={styles.twoColumns}>
           <section className={styles.panel}>
-            <div className={styles.panelTitle}><strong>会员计划</strong><span>{membershipPlans.length} 个计划</span></div>
+            <div className={styles.panelTitle}>
+              <strong>会员计划</strong>
+              <span>{membershipPlans.length} 个计划</span>
+            </div>
             <form className={styles.form} onSubmit={createMembership}>
-              <label><strong>计划编码</strong><input value={membershipCode} onChange={(event) => setMembershipCode(event.target.value)} placeholder="pro" /></label>
+              <div className={styles.membershipFormHeader}>
+                <strong>{membershipEditingPlanId ? "编辑会员计划" : "新建会员计划"}</strong>
+                {membershipEditingPlanId && <button type="button" className={styles.ghost} onClick={resetMembershipForm}>新建计划</button>}
+              </div>
+              <label><strong>计划编码{membershipEditingPlanId ? "（不可修改）" : ""}</strong><input value={membershipCode} onChange={(event) => setMembershipCode(event.target.value)} placeholder="pro" readOnly={Boolean(membershipEditingPlanId)} /></label>
               <label><strong>显示名称</strong><input value={membershipName} onChange={(event) => setMembershipName(event.target.value)} placeholder="Pro" /></label>
               <div className={styles.membershipPriceEditor}>
-                <div className={styles.fieldHint}>只填写你要覆盖的价格，留空则沿用普通用户价格。单位均为积分。</div>
+                <div className={styles.fieldHint}>按普通用户目录价格计算。10 折=原价，5 折=半价，0 折=免费；会员实际扣除积分会自动应用这里的折扣。</div>
                 <div className={styles.membershipPriceGrid}>
-                  <label><strong>图片 1K / 张</strong><input inputMode="decimal" value={membershipPriceDraft.image1K} onChange={(event) => updateMembershipPrice("image1K", event.target.value)} placeholder="例如 1" /></label>
-                  <label><strong>图片 2K / 张</strong><input inputMode="decimal" value={membershipPriceDraft.image2K} onChange={(event) => updateMembershipPrice("image2K", event.target.value)} placeholder="例如 2" /></label>
-                  <label><strong>图片 4K / 张</strong><input inputMode="decimal" value={membershipPriceDraft.image4K} onChange={(event) => updateMembershipPrice("image4K", event.target.value)} placeholder="例如 4" /></label>
-                  <label><strong>视频 / 秒</strong><input inputMode="decimal" value={membershipPriceDraft.videoPerSecond} onChange={(event) => updateMembershipPrice("videoPerSecond", event.target.value)} placeholder="例如 1" /></label>
-                  <label><strong>视频 / 个（整段）</strong><input inputMode="decimal" value={membershipPriceDraft.videoPerVideo} onChange={(event) => updateMembershipPrice("videoPerVideo", event.target.value)} placeholder="例如 10" /></label>
-                  <label><strong>Agent 普通请求 / 次</strong><input inputMode="decimal" value={membershipPriceDraft.agentRequest} onChange={(event) => updateMembershipPrice("agentRequest", event.target.value)} placeholder="仅请求计费模型" /></label>
-                  <label><strong>画布文本节点 / 次</strong><input inputMode="decimal" value={membershipPriceDraft.canvasTextAgent} onChange={(event) => updateMembershipPrice("canvasTextAgent", event.target.value)} placeholder="例如 1" /></label>
-                  <label><strong>工作流文本节点 / 次</strong><input inputMode="decimal" value={membershipPriceDraft.workflow} onChange={(event) => updateMembershipPrice("workflow", event.target.value)} placeholder="例如 1" /></label>
-                  <label><strong>灵感分析 / 次</strong><input inputMode="decimal" value={membershipPriceDraft.inspirationAnalysis} onChange={(event) => updateMembershipPrice("inspirationAnalysis", event.target.value)} placeholder="例如 0" /></label>
+                  <label><strong>GPT Image 家族 1K</strong><input inputMode="decimal" value={membershipDiscountDraft.gptImage1K} onChange={(event) => updateMembershipDiscount("gptImage1K", event.target.value)} placeholder="例如 5" /></label>
+                  <label><strong>Chat 模块</strong><input inputMode="decimal" value={membershipDiscountDraft.chat} onChange={(event) => updateMembershipDiscount("chat", event.target.value)} placeholder="例如 8" /></label>
+                  <label><strong>视频模块</strong><input inputMode="decimal" value={membershipDiscountDraft.video} onChange={(event) => updateMembershipDiscount("video", event.target.value)} placeholder="例如 8" /></label>
+                  <label><strong>其它所有计价</strong><input inputMode="decimal" value={membershipDiscountDraft.other} onChange={(event) => updateMembershipDiscount("other", event.target.value)} placeholder="例如 8" /></label>
                 </div>
-                <div className={styles.customPriceHeader}><strong>其它价格项</strong><button type="button" className={styles.ghost} onClick={addMembershipCustomPrice}>添加价格项</button></div>
-                {membershipCustomPrices.map((item) => (
-                  <div className={styles.customPriceRow} key={item.id}>
-                    <input value={item.label} onChange={(event) => updateMembershipCustomPrice(item.id, "label", event.target.value)} placeholder="显示名称，例如：高清修复" />
-                    <input value={item.key} onChange={(event) => updateMembershipCustomPrice(item.id, "key", event.target.value)} placeholder="键名，例如 hdEnhance" />
-                    <input inputMode="decimal" value={item.value} onChange={(event) => updateMembershipCustomPrice(item.id, "value", event.target.value)} placeholder="积分" />
-                    <button type="button" className={styles.danger} onClick={() => removeMembershipCustomPrice(item.id)}>删除</button>
-                  </div>
-                ))}
+                <div className={styles.membershipModelHint}>
+                  GPT Image 1K 当前覆盖：{membershipModels.filter(gptImageModel).map((model) => model.displayName || model.canonicalModelKey).join("、") || "暂无已发布的 GPT Image 1K 模型"}
+                </div>
               </div>
-              <button disabled={busy}>保存会员计划</button>
+              <button disabled={busy}>{membershipEditingPlanId ? "保存会员计划" : "创建会员计划"}</button>
             </form>
             <div className={styles.codeList}>
-              {membershipPlans.map((plan) => <article key={plan.id}><strong>{plan.name}（{plan.code}）</strong><small>{plan.memberCount} 位会员 · {plan.active ? "启用" : "停用"}</small></article>)}
+              {membershipPlans.map((plan) => (
+                <article key={plan.id}>
+                  <span><strong>{plan.name}（{plan.code}）</strong><small>{plan.memberCount} 位会员 · {plan.active ? "启用" : "停用"}</small></span>
+                  <button type="button" className={styles.ghost} onClick={() => editMembershipPlan(plan)}>编辑</button>
+                </article>
+              ))}
               {!membershipPlans.length && <p className={styles.empty}>暂无会员计划，请先创建</p>}
             </div>
           </section>
           <section className={styles.panel}>
             <div className={styles.panelTitle}><strong>邀请奖励规则</strong><span>注册与充值可分别配置</span></div>
             <form className={styles.form} onSubmit={saveReferralRule}>
+              <div className={styles.referralSection}><strong>注册奖励</strong><span>绑定邀请码时双方各获得一次</span></div>
               <label><strong>邀请人奖励积分</strong><input inputMode="decimal" value={ruleInviterCredits} onChange={(event) => setRuleInviterCredits(event.target.value)} /></label>
-              <label><strong>新用户奖励积分</strong><input inputMode="decimal" value={ruleInviteeCredits} onChange={(event) => setRuleInviteeCredits(event.target.value)} /></label>
-              <button disabled={busy}>保存注册奖励</button>
+              <label><strong>被邀请人奖励积分</strong><input inputMode="decimal" value={ruleInviteeCredits} onChange={(event) => setRuleInviteeCredits(event.target.value)} /></label>
+              <div className={styles.referralSection}><strong>充值奖励</strong><span>被邀请人兑换充值码且达到门槛后发放</span></div>
+              <label><strong>最低充值积分</strong><input inputMode="decimal" value={ruleRechargeMin} onChange={(event) => setRuleRechargeMin(event.target.value)} placeholder="0 表示不设门槛" /></label>
+              <label><strong>邀请人充值奖励积分</strong><input inputMode="decimal" value={ruleRechargeInviterCredits} onChange={(event) => setRuleRechargeInviterCredits(event.target.value)} /></label>
+              <label><strong>被邀请人充值奖励积分</strong><input inputMode="decimal" value={ruleRechargeInviteeCredits} onChange={(event) => setRuleRechargeInviteeCredits(event.target.value)} /></label>
+              <button disabled={busy}>保存注册与充值奖励</button>
             </form>
             <div className={styles.codeList}>
-              {referralRules.map((rule) => <article key={rule.id}><strong>{rule.eventType}</strong><small>邀请人 {rule.inviterCredits} · 新用户 {rule.inviteeCredits} · {rule.active ? "启用" : "停用"}</small></article>)}
+              {referralRules.map((rule) => <article key={rule.id}><span><strong>{rule.eventType === "REGISTRATION" ? "注册奖励" : rule.eventType === "RECHARGE" ? "充值奖励" : rule.eventType}</strong><small>邀请人 {rule.inviterCredits} · 被邀请人 {rule.inviteeCredits}{rule.minRecharge ? ` · 最低充值 ${rule.minRecharge}` : ""} · {rule.active ? "启用" : "停用"}</small></span></article>)}
               {!referralRules.length && <p className={styles.empty}>暂无邀请规则</p>}
             </div>
           </section>
