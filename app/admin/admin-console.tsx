@@ -3,11 +3,9 @@
 import { FormEvent, useCallback, useState } from "react";
 import { apiBaseUrl } from "../site-shared";
 import {
-  getUselgOpenAiRoutingHint,
   newProviderDraft,
   normalizePricing,
   pricingLabel,
-  providerCapabilities,
   providerKinds,
   providerMeta,
   providerToDraft,
@@ -19,7 +17,6 @@ import {
   type AdminMembershipPlan,
   type AdminOverview,
   type AdminProvider,
-  type AdminProviderCapability,
   type AdminProviderKind,
   type AdminUser,
   type AdminUserDetail,
@@ -115,10 +112,6 @@ export function AdminConsole() {
   const [reviews, setReviews] = useState<ReviewShare[]>([]);
   const [providers, setProviders] = useState<AdminProvider[]>([]);
   const [providerDraft, setProviderDraft] = useState<ProviderDraft>(() => newProviderDraft());
-  const uselgOpenAiRoutingHint = getUselgOpenAiRoutingHint(
-    providerDraft.kind,
-    providerDraft.capabilities,
-  );
   const [providerBalance, setProviderBalance] = useState<ProviderBalance | null>(null);
   const [pricing, setPricing] = useState<AdminAiPricing | null>(null);
   const [chatPricing, setChatPricing] = useState<AdminChatPricing | null>(null);
@@ -581,19 +574,6 @@ export function AdminConsole() {
     clearMessage();
   };
 
-  const toggleProviderCapability = (capability: AdminProviderCapability) => {
-    setProviderDraft((current) => {
-      const enabled = current.capabilities.includes(capability);
-      if (enabled && current.capabilities.length === 1) return current;
-      return {
-        ...current,
-        capabilities: enabled
-          ? current.capabilities.filter((item) => item !== capability)
-          : [...current.capabilities, capability],
-      };
-    });
-  };
-
   const parseProviderHeaders = () => {
     const parsed: unknown = JSON.parse(providerDraft.headersText.trim() || "{}");
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -629,7 +609,6 @@ export function AdminConsole() {
         allowInsecureHttp: providerDraft.allowInsecureHttp,
         apiKey: providerDraft.apiKey.trim() || undefined,
         headers,
-        capabilities: providerDraft.capabilities,
         enabled: providerDraft.enabled,
         idempotencyKey: operationKey(providerDraft.id ? "web-provider-update" : "web-provider-create"),
       };
@@ -1197,13 +1176,12 @@ export function AdminConsole() {
               <label><strong>API Base URL</strong><input value={providerDraft.baseUrl} onChange={(event) => setProviderDraft((current) => ({ ...current, baseUrl: event.target.value }))} placeholder={providerMeta[providerDraft.kind].placeholder} spellCheck={false} /></label>
               <div className={styles.formGrid}>
                 <label><strong>调用优先级</strong><input type="number" min={0} max={9999} value={providerDraft.priority} onChange={(event) => setProviderDraft((current) => ({ ...current, priority: Math.min(9999, Math.max(0, Number(event.target.value) || 0)) }))} /></label>
-                <label><strong>默认模型</strong><input value={providerDraft.defaultModel} onChange={(event) => setProviderDraft((current) => ({ ...current, defaultModel: event.target.value }))} spellCheck={false} /></label>
+                <label><strong>旧版兼容默认模型</strong><input value={providerDraft.defaultModel} onChange={(event) => setProviderDraft((current) => ({ ...current, defaultModel: event.target.value }))} spellCheck={false} /></label>
               </div>
               <label><strong>API Key</strong><input type="password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft((current) => ({ ...current, apiKey: event.target.value }))} placeholder={providerDraft.id ? `留空保留 ****${providers.find((item) => item.id === providerDraft.id)?.apiKeyLast4 || ""}` : "填写上游 API Key"} autoComplete="new-password" /></label>
-              <div className={styles.capabilities}>
-                {providerCapabilities.map((item) => <label key={item.value}><input type="checkbox" checked={providerDraft.capabilities.includes(item.value)} onChange={() => toggleProviderCapability(item.value)} /><span>{item.label}</span></label>)}
+              <div className={styles.routingHint}>
+                模型、能力与实际路由统一在 AI Model Center 中管理；这里仅维护渠道连接。旧版能力数据会继续保留用于兼容旧客户端。
               </div>
-              {uselgOpenAiRoutingHint && <small className={styles.routingHint}>{uselgOpenAiRoutingHint}</small>}
               <label className={styles.inlineCheck}><input type="checkbox" checked={providerDraft.allowInsecureHttp} onChange={(event) => setProviderDraft((current) => ({ ...current, allowInsecureHttp: event.target.checked }))} />允许明文 HTTP</label>
               {providerDraft.id && <label className={styles.inlineCheck}><input type="checkbox" checked={providerDraft.replaceHeaders} onChange={(event) => setProviderDraft((current) => ({ ...current, replaceHeaders: event.target.checked, headersText: "{}" }))} />替换已有自定义 Headers</label>}
               <label><strong>自定义 Headers（JSON）</strong><textarea disabled={Boolean(providerDraft.id) && !providerDraft.replaceHeaders} value={providerDraft.headersText} onChange={(event) => setProviderDraft((current) => ({ ...current, headersText: event.target.value }))} rows={3} spellCheck={false} /></label>
@@ -1213,7 +1191,7 @@ export function AdminConsole() {
                 <button className={styles.danger} type="button" disabled={!providerDraft.id || busy} onClick={() => void deleteProvider()}>删除渠道</button>
                 <button className={styles.ghost} type="button" disabled={!providerDraft.id || busy} onClick={() => void queryProviderBalance()}>查询余额</button>
                 <button className={styles.ghost} type="button" disabled={!providerDraft.id || busy} onClick={() => void testProvider()}>测试连接</button>
-                <button disabled={busy || providerDraft.capabilities.length === 0}>{providerDraft.id ? "保存修改" : "保存渠道"}</button>
+                <button disabled={busy}>{providerDraft.id ? "保存修改" : "保存渠道"}</button>
               </div>
             </form>
           </section>

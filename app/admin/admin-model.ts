@@ -259,45 +259,6 @@ export const providerMeta: Record<AdminProviderKind, {
 
 export const providerKinds = (Object.keys(providerMeta) as AdminProviderKind[]);
 
-export const providerCapabilities: Array<{
-  value: Exclude<AdminProviderCapability, "IMAGE" | "IMAGE_NANO_BANANA_PRO_1K">;
-  label: string;
-}> = [
-  { value: "VIDEO_MINIMAX", label: "MiniMax H3 Video" },
-  { value: "LLM", label: "Agent / GPT (OpenAI)" },
-  { value: "VISION", label: "图片分析 / Vision" },
-  { value: "IMAGE_NANO_BANANA", label: "Nano Banana Pro / Gemini 生图" },
-  { value: "IMAGE_NANO_BANANA_2", label: "Nano Banana 2 / Gemini 生图" },
-  { value: "IMAGE_NANO_BANANA_PRO_FAST", label: "Nano Banana Pro（稳定高速）" },
-  { value: "IMAGE_NANO_BANANA_2_FAST", label: "Nano Banana 2（稳定高速）" },
-  { value: "IMAGE_NANO_BANANA_DUAL_2K", label: "Banana Pro 2K + Banana 2 2K" },
-  { value: "IMAGE_GPT", label: "GPT Image / Image2 生图" },
-  { value: "IMAGE_GPT_1K", label: "GPT Image / Image2 1K 生图" },
-  { value: "IMAGE_GROK", label: "Grok Imagine 生图 / 编辑" },
-  { value: "VIDEO", label: "视频生成" },
-];
-
-export const getUselgOpenAiRouting = (
-  kind: AdminProviderKind,
-  capabilities: readonly AdminProviderCapability[],
-) => ({
-  agent: kind === "USELG" && capabilities.includes("LLM"),
-  vision: kind === "USELG" && capabilities.includes("VISION"),
-});
-
-export const getUselgOpenAiRoutingHint = (
-  kind: AdminProviderKind,
-  capabilities: readonly AdminProviderCapability[],
-) => {
-  const routing = getUselgOpenAiRouting(kind, capabilities);
-  if (!routing.agent && !routing.vision) return "";
-  const enabled = routing.agent && routing.vision
-    ? "Agent / GPT 与图片分析"
-    : routing.agent ? "Agent / GPT" : "图片分析";
-  const visionRequirement = routing.vision ? " 图片分析的默认模型必须支持 image_url。" : "";
-  return `${enabled}将通过 OpenAI 兼容的 /v1/chat/completions 调用；生图能力仍使用原有接口。${visionRequirement}`;
-};
-
 const defaultProviderModel = (kind: AdminProviderKind) => {
   if (kind === "MINIMAX") return "MiniMax-H3";
   if (kind === "USELG") return "gpt-image-2";
@@ -306,9 +267,7 @@ const defaultProviderModel = (kind: AdminProviderKind) => {
 
 const defaultProviderCapabilities = (kind: AdminProviderKind): AdminProviderCapability[] => {
   if (kind === "MINIMAX") return ["VIDEO_MINIMAX"];
-  if (kind === "USELG") {
-    return ["IMAGE_NANO_BANANA", "IMAGE_NANO_BANANA_2", "IMAGE_GPT", "IMAGE_GROK"];
-  }
+  if (kind === "USELG" || kind === "BIGMODEL") return ["IMAGE"];
   return ["LLM"];
 };
 
@@ -328,15 +287,6 @@ export const newProviderDraft = (kind: AdminProviderKind = "NEW_API"): ProviderD
 });
 
 export const providerToDraft = (provider: AdminProvider): ProviderDraft => {
-  const normalized = new Set<AdminProviderCapability>(provider.capabilities);
-  if (normalized.delete("IMAGE_NANO_BANANA_PRO_1K")) normalized.add("IMAGE_NANO_BANANA_DUAL_2K");
-  if (normalized.delete("IMAGE")) {
-    normalized.add("IMAGE_NANO_BANANA");
-    normalized.add("IMAGE_NANO_BANANA_2");
-    normalized.add("IMAGE_NANO_BANANA_DUAL_2K");
-    normalized.add("IMAGE_GPT");
-    normalized.add("IMAGE_GPT_1K");
-  }
   return {
     id: provider.id,
     kind: provider.kind,
@@ -348,7 +298,7 @@ export const providerToDraft = (provider: AdminProvider): ProviderDraft => {
     apiKey: "",
     headersText: "{}",
     replaceHeaders: false,
-    capabilities: providerCapabilities.map((item) => item.value).filter((item) => normalized.has(item)),
+    capabilities: [...provider.capabilities],
     enabled: provider.enabled,
   };
 };

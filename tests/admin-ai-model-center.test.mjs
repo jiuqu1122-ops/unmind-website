@@ -92,6 +92,9 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /保存为待发布/);
   assert.match(source, /发布新价格/);
   assert.match(source, /Capabilities JSON（只读）/);
+  assert.match(source, /编辑渠道成本与能力/);
+  assert.match(source, /继承模型能力/);
+  assert.match(source, /capabilitiesOverride,/);
   assert.match(source, /确认删除模型/);
   assert.match(source, /method: "DELETE"/);
   assert.doesNotMatch(source, /<textarea/);

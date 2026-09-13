@@ -43,6 +43,7 @@ type BasicDraft = {
 type RouteDraft = {
   priority: string;
   costProfile: JsonObject;
+  capabilitiesOverride: JsonObject | null;
 };
 
 type CreateDraft = {
@@ -210,6 +211,9 @@ const priceDraftFor = (detail: AdminAiModelDetail) => {
 const routeDraftsFor = (routes: AiModelRoute[]) => Object.fromEntries(routes.map((route) => [route.id, {
   priority: String(route.priority),
   costProfile: cloneObject(route.costProfile ?? { currency: "CNY" }),
+  capabilitiesOverride: route.capabilitiesOverride === null
+    ? null
+    : cloneObject(route.capabilitiesOverride),
 }]));
 
 const bundleSignature = (bundle: DraftBundle) => JSON.stringify(bundle);
@@ -781,15 +785,26 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
       return false;
     }
     const costProfile = withoutBlankValues(draft.costProfile) as JsonObject;
+    const capabilitiesOverride = draft.capabilitiesOverride === null
+      ? null
+      : withoutBlankValues(draft.capabilitiesOverride) as JsonObject;
+    const capabilitiesChanged = JSON.stringify(capabilitiesOverride)
+      !== JSON.stringify(route.capabilitiesOverride);
     try {
       validateNumericTree(costProfile);
+      if (capabilitiesOverride) validateNumericTree(capabilitiesOverride);
     } catch (reason) {
       onError(reasonMessage(reason, "上游成本格式错误"));
       return false;
     }
     const operation = () => request(`/v1/admin/ai-models/routes/${encodeURIComponent(route.id)}`, {
       method: "PATCH",
-      body: JSON.stringify({ priority, costProfile, expectedUpdatedAt: route.updatedAt }),
+      body: JSON.stringify({
+        priority,
+        costProfile,
+        ...(capabilitiesChanged ? { capabilitiesOverride } : {}),
+        expectedUpdatedAt: route.updatedAt,
+      }),
     });
     if (refresh) return perform(operation, "上游渠道设置已保存");
     await operation();
@@ -1135,12 +1150,50 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
               <section className={styles.editorCard}>
                 <header><div><span>03</span><h4>上游渠道</h4></div><small>成本属于渠道，用户售价属于模型</small></header>
                 <div className={styles.routeCards}>{detail.routes.map((route) => {
-                  const routeDraft = routeDrafts[route.id] ?? { priority: String(route.priority), costProfile: {} };
+                  const routeDraft = routeDrafts[route.id] ?? {
+                    priority: String(route.priority),
+                    costProfile: {},
+                    capabilitiesOverride: route.capabilitiesOverride === null
+                      ? null
+                      : cloneObject(route.capabilitiesOverride),
+                  };
                   const isDefault = detail.defaultRouteId === route.id;
                   return <article key={route.id}>
                     <header><div><strong>{route.channel?.name ?? route.provider}</strong><small>上游模型：{route.upstreamModelId}</small></div><span data-ok={operationalRoute(route)}>● {routeState(route)}</span></header>
                     <dl><div><dt>采购成本</dt><dd>{costSummary(route.costProfile)}</dd></div><div><dt>优先级</dt><dd>{route.priority}</dd></div><div><dt>默认渠道</dt><dd>{isDefault ? "是" : "否"}</dd></div><div><dt>最后同步</dt><dd>{formatDateTime(route.lastSyncedAt)}</dd></div></dl>
-                    <details className={styles.routeCostEditor}><summary>编辑优先级与采购成本</summary><label><strong>优先级</strong><input type="number" min={0} value={routeDraft.priority} onChange={(event) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, priority: event.target.value } }))} /></label><CostEditor modality={detail.modality} value={routeDraft.costProfile} onChange={(costProfile) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, costProfile } }))} /><button type="button" disabled={busy} onClick={() => void saveRoute(route)}>保存渠道设置</button></details>
+                    <details className={styles.routeCostEditor}>
+                      <summary>编辑渠道成本与能力</summary>
+                      <label><strong>优先级</strong><input type="number" min={0} value={routeDraft.priority} onChange={(event) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, priority: event.target.value } }))} /></label>
+                      <CostEditor modality={detail.modality} value={routeDraft.costProfile} onChange={(costProfile) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, costProfile } }))} />
+                      <label className={styles.inlineCheck}>
+                        <input
+                          type="checkbox"
+                          checked={routeDraft.capabilitiesOverride === null}
+                          onChange={(event) => setRouteDrafts((current) => ({
+                            ...current,
+                            [route.id]: {
+                              ...routeDraft,
+                              capabilitiesOverride: event.target.checked
+                                ? null
+                                : cloneObject(route.capabilitiesOverride ?? detail.capabilities),
+                            },
+                          }))}
+                        />
+                        继承模型能力
+                      </label>
+                      {routeDraft.capabilitiesOverride !== null && (
+                        <CapabilitiesEditor
+                          modality={detail.modality}
+                          value={routeDraft.capabilitiesOverride}
+                          onChange={(capabilitiesOverride) => setRouteDrafts((current) => ({
+                            ...current,
+                            [route.id]: { ...routeDraft, capabilitiesOverride },
+                          }))}
+                          compact
+                        />
+                      )}
+                      <button type="button" disabled={busy} onClick={() => void saveRoute(route)}>保存渠道设置</button>
+                    </details>
                     <footer>{!isDefault && route.enabled && <button type="button" className={styles.ghost} onClick={() => void setDefaultRoute(route)}>设为默认</button>}<button type="button" className={styles.ghost} onClick={() => { setRemapRoute(route); setRemapTarget(""); setRemapQuery(""); }}>更改映射</button><button type="button" className={route.enabled ? styles.textDanger : styles.ghost} onClick={() => void toggleRoute(route, !route.enabled)}>{route.enabled ? "停用" : "启用"}</button><details><summary>更多</summary><div><button type="button" className={styles.textDanger} disabled={!route.channelId} onClick={() => unmapRoute(route)}>解除映射</button><details><summary>高级信息</summary><pre>{formatJson({ routeId: route.id, canonicalModelId: route.canonicalModelId, upstreamModelId: route.upstreamModelId, provider: route.provider, pricingSyncStatus: route.pricingSyncStatus, capabilitiesOverride: route.capabilitiesOverride, metadata: route.metadata })}</pre></details></div></details></footer>
                   </article>;
                 })}{!detail.routes.length && <div className={styles.noUpstream}><strong>暂无可用上游</strong><p>请从“未映射”页面添加渠道，或继续使用旧版兼容配置。</p></div>}</div>

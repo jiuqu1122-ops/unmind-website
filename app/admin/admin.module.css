@@ -120,11 +120,8 @@
 .fieldHint { color: #7a879b; font-size: 10px; line-height: 1.5; }
 .providerForm .panelTitle { margin-bottom: 2px; }
 .inlineCheck { display: flex!important; align-items: center; gap: 8px!important; color: #4e5b70; font-size: 11px; }
-.inlineCheck input,.capabilities input { width: 15px!important; min-height: 15px!important; accent-color: #2868ed; }
-.capabilities { padding: 12px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 12px; border: 1px solid #e0e6f0; border-radius: 12px; background: #fafcff; }
-.capabilities label { display: flex!important; align-items: center; gap: 7px!important; }
-.capabilities span { color: #53627b; font-size: 10px; }
-.routingHint { display: block; margin-top: -6px; color: #59677d; font-size: 10px; line-height: 1.6; }
+.inlineCheck input { width: 15px!important; min-height: 15px!important; accent-color: #2868ed; }
+.routingHint { display: block; margin-top: -6px; padding: 10px 12px; border: 1px solid #d9e9ff; border-radius: 10px; background: #f5f9ff; color: #59677d; font-size: 10px; line-height: 1.6; }
 .providerStatus { padding: 11px 13px; display: grid; gap: 4px; border: 1px solid #d9e9ff; border-radius: 11px; background: #f1f6ff; color: #2868ed; }
 .providerStatus strong { font-size: 11px; }
 .providerStatus small { color: #71809a; font-size: 9px; }
