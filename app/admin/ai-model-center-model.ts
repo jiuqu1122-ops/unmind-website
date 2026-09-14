@@ -4,6 +4,7 @@ export type AiModelModality = "chat" | "image" | "video";
 export type AiModelStatus = "DRAFT" | "PUBLISHED" | "RETIRED";
 export type AiRoutingMode = "LEGACY" | "MANAGED";
 export type AiPricingMode = "MANUAL" | "MARKUP";
+export type AiUsageModelKey = "IMAGE_ANALYSIS" | "CANVAS_TEXT";
 
 export type AiModelRoute = {
   id: string;
@@ -97,7 +98,27 @@ export type AdminAiModelDetail = Omit<AdminAiModelSummary,
     priceVersions: number;
     requests: number;
     billingSettlements: number;
+    usageBindings: number;
   };
+};
+
+export type AdminAiUsageModelBinding = {
+  key: AiUsageModelKey;
+  canonicalModelId: string | null;
+  canonicalModelKey: string | null;
+  displayName: string | null;
+  updatedAt: string | null;
+  operational: boolean;
+  route: AiModelRoute | null;
+};
+
+export type AdminAiUsageModelBindings = {
+  items: AdminAiUsageModelBinding[];
+  candidates: Record<AiUsageModelKey, Array<{
+    id: string;
+    canonicalModelKey: string;
+    displayName: string;
+  }>>;
 };
 
 export type AiUpstreamDiscovery = {
@@ -357,6 +378,13 @@ export function humanModelStatus(model: AdminAiModelSummary) {
   if (model.status === "DRAFT") return "草稿";
   if (model.status === "RETIRED") return "已退役";
   if (!model.enabled) return "已停用";
+  if (model.routingMode === "MANAGED" && !model.routes.some((route) => (
+    route.enabled
+    && route.upstreamAvailable
+    && !["UNAVAILABLE", "UNHEALTHY", "DOWN", "FAILED", "DISABLED"].includes(route.healthStatus.toUpperCase())
+    && Boolean(route.channel)
+    && route.channel?.status === "ACTIVE"
+  ))) return "无可用调用路由";
   if (!model.routes.some((route) => route.enabled)) return "无可用上游";
   if (!model.routes.some((route) => route.enabled && route.upstreamAvailable)) return "上游异常";
   return "正常";

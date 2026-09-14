@@ -97,6 +97,10 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /capabilitiesOverride,/);
   assert.match(source, /确认删除模型/);
   assert.match(source, /method: "DELETE"/);
+  assert.match(source, /usage-model-bindings/);
+  assert.match(source, /IMAGE_ANALYSIS/);
+  assert.match(source, /CANVAS_TEXT/);
+  assert.match(source, /USAGE_MODEL_NOT_AVAILABLE/);
   assert.doesNotMatch(source, /<textarea/);
   assert.doesNotMatch(source, /<input[^>]+upstreamModelId/);
 });
@@ -105,6 +109,17 @@ test("shows lifecycle state before route health", () => {
   assert.equal(humanModelStatus({ status: "DRAFT", enabled: true, routes: [{ enabled: true, upstreamAvailable: true }] }), "草稿");
   assert.equal(humanModelStatus({ status: "RETIRED", enabled: false, routes: [] }), "已退役");
   assert.equal(humanModelStatus({ status: "PUBLISHED", enabled: false, routes: [{ enabled: true }] }), "已停用");
+  assert.equal(humanModelStatus({
+    status: "PUBLISHED",
+    enabled: true,
+    routingMode: "MANAGED",
+    routes: [{
+      enabled: true,
+      upstreamAvailable: true,
+      healthStatus: "HEALTHY",
+      channel: { status: "DISABLED" },
+    }],
+  }), "无可用调用路由");
 });
 
 test("chooses the lowest representative upstream route without changing priority", () => {

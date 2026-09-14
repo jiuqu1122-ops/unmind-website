@@ -19,6 +19,8 @@ import {
   priceSummary,
   type AdminAiModelDetail,
   type AdminAiModelSummary,
+  type AdminAiUsageModelBindings,
+  type AiUsageModelKey,
   type AiModelModality,
   type AiModelRoute,
   type AiUpstreamDiscovery,
@@ -27,7 +29,7 @@ import {
 import styles from "./admin.module.css";
 
 type AdminRequest = <T>(path: string, options?: RequestInit) => Promise<T>;
-type CenterView = "all" | AiModelModality | "unmapped";
+type CenterView = "all" | AiModelModality | "usage" | "unmapped";
 type StatusFilter = "all" | "visible" | "hidden" | "enabled" | "disabled" | "no-route" | "cost-warning" | "pending";
 
 type BasicDraft = {
@@ -169,6 +171,7 @@ const operationalRoute = (route: AiModelRoute) => (
   && !["UNAVAILABLE", "UNHEALTHY", "DOWN", "FAILED", "DISABLED"].includes(route.healthStatus.toUpperCase())
   && (!route.channel || route.channel.status === "ACTIVE")
 );
+const operationalManagedRoute = (route: AiModelRoute) => operationalRoute(route) && Boolean(route.channel);
 
 const routeState = (route: AiModelRoute) => {
   if (!route.enabled) return "渠道已停用";
@@ -577,6 +580,14 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
   const [query, setQuery] = useState("");
   const [models, setModels] = useState<AdminAiModelSummary[]>([]);
   const [unmapped, setUnmapped] = useState<AiUpstreamDiscovery[]>([]);
+  const [usageBindings, setUsageBindings] = useState<AdminAiUsageModelBindings>({
+    items: [],
+    candidates: { IMAGE_ANALYSIS: [], CANVAS_TEXT: [] },
+  });
+  const [usageDrafts, setUsageDrafts] = useState<Record<AiUsageModelKey, string>>({
+    IMAGE_ANALYSIS: "",
+    CANVAS_TEXT: "",
+  });
   const [selectedKey, setSelectedKey] = useState("");
   const [detail, setDetail] = useState<AdminAiModelDetail | null>(null);
   const [basic, setBasic] = useState<BasicDraft>(emptyBasic);
@@ -658,13 +669,19 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
   const refreshCenter = useCallback(async (preferredKey?: string) => {
     setLoading(true);
     try {
-      const [modelPage, unmappedPage] = await Promise.all([
+      const [modelPage, unmappedPage, usagePage] = await Promise.all([
         request<{ items: AdminAiModelSummary[] }>("/v1/admin/ai-models/"),
         request<{ items: AiUpstreamDiscovery[] }>("/v1/admin/ai-models/unmapped"),
+        request<AdminAiUsageModelBindings>("/v1/admin/ai-models/usage-model-bindings"),
       ]);
       setSupported(true);
       setModels(modelPage.items);
       setUnmapped(unmappedPage.items);
+      setUsageBindings(usagePage);
+      setUsageDrafts({
+        IMAGE_ANALYSIS: usagePage.items.find((item) => item.key === "IMAGE_ANALYSIS")?.canonicalModelId ?? "",
+        CANVAS_TEXT: usagePage.items.find((item) => item.key === "CANVAS_TEXT")?.canonicalModelId ?? "",
+      });
       setCreateDrafts((current) => Object.fromEntries(unmappedPage.items.map((item) => [item.id, current[item.id] ?? createDraftFor(item)])));
       setMappingTargets((current) => Object.fromEntries(unmappedPage.items.map((item) => {
         const candidate = modelPage.items.find((model) => !item.suggestedModality || model.modality === item.suggestedModality);
@@ -687,6 +704,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
         setSupported(false);
         setModels([]);
         setUnmapped([]);
+        setUsageBindings({ items: [], candidates: { IMAGE_ANALYSIS: [], CANVAS_TEXT: [] } });
         setDetail(null);
       } else {
         onError(reasonMessage(reason, "AI 模型目录读取失败"));
@@ -959,6 +977,18 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
     });
   };
 
+  const saveUsageBinding = async (key: AiUsageModelKey) => {
+    const canonicalModelId = usageDrafts[key];
+    if (!canonicalModelId) {
+      onError("请选择可用的 Chat 模型");
+      return;
+    }
+    await perform(() => request(`/v1/admin/ai-models/usage-model-bindings/${key}`, {
+      method: "PATCH",
+      body: JSON.stringify({ canonicalModelId }),
+    }), key === "IMAGE_ANALYSIS" ? "图片分析任务模型已保存" : "文字节点任务模型已保存");
+  };
+
   const deleteModel = () => {
     if (!detail) return;
     const model = detail;
@@ -1013,7 +1043,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
   };
 
   const filteredModels = useMemo(() => models.filter((model) => {
-    if (view !== "all" && view !== "unmapped" && !modelMatchesModality(model, view)) return false;
+    if (view !== "all" && view !== "unmapped" && view !== "usage" && !modelMatchesModality(model, view)) return false;
     const haystack = `${model.displayName} ${model.canonicalModelKey} ${model.routes.map((route) => `${route.channel?.name ?? ""} ${route.upstreamModelId}`).join(" ")}`.toLowerCase();
     if (query.trim() && !haystack.includes(query.trim().toLowerCase())) return false;
     if (statusFilter === "visible" && !model.visible) return false;
@@ -1044,7 +1074,8 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
     && detail.routes.length === 0
     && detail.priceVersions.length === 0
     && (detail._count?.requests ?? 0) === 0
-    && (detail._count?.billingSettlements ?? 0) === 0);
+    && (detail._count?.billingSettlements ?? 0) === 0
+    && (detail._count?.usageBindings ?? 0) === 0);
 
   if (!supported) return (
     <section className={`${styles.panel} ${styles.modelCenterUnavailable}`}>
@@ -1068,13 +1099,13 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
 
       <section className={styles.modelCommandBar}>
         <nav aria-label="模型类型">
-          {(["all", "chat", "image", "video", "unmapped"] as const).map((item) => (
-            <button key={item} type="button" data-active={view === item} onClick={() => changeView(item)}>{item === "all" ? "全部" : item === "unmapped" ? `未映射 ${unmapped.length}` : modalityLabel[item]}</button>
+          {(["all", "chat", "image", "video", "usage", "unmapped"] as const).map((item) => (
+            <button key={item} type="button" data-active={view === item} onClick={() => changeView(item)}>{item === "all" ? "全部" : item === "usage" ? "任务模型" : item === "unmapped" ? `未映射 ${unmapped.length}` : modalityLabel[item]}</button>
           ))}
         </nav>
         <div className={styles.modelSearchFilters}>
-          <input type="search" placeholder="搜索模型、渠道或上游名称" value={query} onChange={(event) => setQuery(event.target.value)} />
-          {view !== "unmapped" && <select aria-label="状态筛选" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">全部状态</option><option value="visible">用户可见</option><option value="hidden">已隐藏</option><option value="enabled">允许调用</option><option value="disabled">已停用</option><option value="no-route">无上游</option><option value="cost-warning">成本异常</option><option value="pending">价格待发布</option></select>}
+          {view !== "usage" && <input type="search" placeholder="搜索模型、渠道或上游名称" value={query} onChange={(event) => setQuery(event.target.value)} />}
+          {view !== "unmapped" && view !== "usage" && <select aria-label="状态筛选" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">全部状态</option><option value="visible">用户可见</option><option value="hidden">已隐藏</option><option value="enabled">允许调用</option><option value="disabled">已停用</option><option value="no-route">无上游</option><option value="cost-warning">成本异常</option><option value="pending">价格待发布</option></select>}
         </div>
         <div className={styles.syncMenu}>
           <button type="button" disabled={busy} onClick={() => void syncProvider()}>{busy ? "正在同步…" : "同步上游模型"}</button>
@@ -1086,7 +1117,29 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
 
       {showChanges && <section className={styles.changeCenter}><header><div><span>待处理变化</span><h3>需要运营确认的事项</h3></div><strong>{syncChanges.length + attentionModels.length}</strong></header><div>{syncChanges.slice(0, 8).map((item, index) => { const model = models.find((candidate) => candidate.id === item.canonicalModelId); return <button type="button" key={`${item.providerId}:${item.upstreamModelId}:${item.kind}:${index}`} onClick={() => model ? selectModel(model.canonicalModelKey) : setView("unmapped")}><b>{item.kind === "NEW_MODEL" ? "新上游模型" : item.kind === "COST_CHANGED" ? "成本变化" : "状态变化"}</b><span>{item.providerName} · {item.upstreamModelId}</span><small>{item.kind === "COST_CHANGED" ? `${costSummary(jsonObjectOrNull(item.before))} → ${costSummary(jsonObjectOrNull(item.after))}；用户售价保持不变` : item.kind === "STATUS_CHANGED" ? `${String(item.before ?? "未知")} → ${String(item.after ?? "未知")}` : model ? `已识别为 ${model.displayName}，新渠道默认停用` : "等待映射"}</small></button>; })}{attentionModels.slice(0, 6).map((model) => <button type="button" key={model.id} onClick={() => selectModel(model.canonicalModelKey)}><b>{model.pendingPrice ? "价格待发布" : "渠道需处理"}</b><span>{model.displayName}</span><small>{model.pendingPrice ? `${priceSummary(model.currentPrice)} → ${priceSummary(model.pendingPrice)}` : "用户售价保持不变"}</small></button>)}</div>{!syncChanges.length && !attentionModels.length && <p>没有待处理变化</p>}</section>}
 
-      {view === "unmapped" ? (
+      {view === "usage" ? (
+        <section className={styles.modelEditor} aria-busy={loading || busy}>
+          <header className={styles.modelEditorHeader}>
+            <div><span>USAGE MODEL BINDINGS</span><h3>任务模型</h3><p>业务用途绑定 canonical Chat 模型；真实上游渠道仍由服务端路由决定。</p></div>
+          </header>
+          <div className={styles.editorSectionGrid}>
+            {(["IMAGE_ANALYSIS", "CANVAS_TEXT"] as const).map((key) => {
+              const binding = usageBindings.items.find((item) => item.key === key);
+              const candidates = usageBindings.candidates[key];
+              const selectedStillAvailable = candidates.some((candidate) => candidate.id === usageDrafts[key]);
+              const currentRouteLabel = binding?.route
+                ? `${binding.route.channel?.name ?? binding.route.provider} · ${binding.route.upstreamModelId}`
+                : "无可用调用路由";
+              return <section className={styles.editorCard} key={key}>
+                <header><div><span>{key === "IMAGE_ANALYSIS" ? "01" : "02"}</span><h4>{key === "IMAGE_ANALYSIS" ? "图片分析" : "文字节点 / 提示词优化"}</h4></div><button type="button" disabled={busy || !usageDrafts[key]} onClick={() => void saveUsageBinding(key)}>{busy ? "正在保存…" : "保存"}</button></header>
+                <p>{key === "IMAGE_ANALYSIS" ? "仅列出具备 operational Vision route 的 Chat 模型。" : "canvas_text_agent 与 prompt_optimization 共用此模型；普通 Chat 不受影响。"}</p>
+                <div className={styles.formGrid}><label><strong>当前 canonical 模型</strong><select aria-label={key === "IMAGE_ANALYSIS" ? "图片分析任务模型" : "文字节点任务模型"} value={usageDrafts[key]} onChange={(event) => setUsageDrafts((current) => ({ ...current, [key]: event.target.value }))}><option value="">请选择模型</option>{usageDrafts[key] && !selectedStillAvailable && <option value={usageDrafts[key]}>{binding?.displayName ?? binding?.canonicalModelKey ?? "当前模型"}（当前不可用）</option>}{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.displayName} · {candidate.canonicalModelKey}</option>)}</select></label><label><strong>当前路由</strong><input value={currentRouteLabel} disabled /></label></div>
+                {!binding?.operational && <div className={styles.inlineWarning}>无可用调用路由。服务端会返回 USAGE_MODEL_NOT_AVAILABLE，不会静默切换模型。</div>}
+              </section>;
+            })}
+          </div>
+        </section>
+      ) : view === "unmapped" ? (
         <section className={styles.unmappedWorkspace}>
           <header><div><span>REVIEW QUEUE</span><h3>未映射模型</h3><p>新上游不会自动合并，也不会自动向用户开放。</p></div><strong>{filteredUnmapped.length}</strong></header>
           <div className={styles.unmappedTable}>
@@ -1130,6 +1183,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
             <header className={styles.modelEditorHeader}><div><span>{detail.canonicalModelKey}</span><h3>{detail.displayName}</h3><p>{basic.routingMode === "LEGACY" ? "正在使用旧版兼容配置，不影响当前使用。" : "由已启用的上游渠道按优先级提供服务。"}</p></div><div><i data-on={detail.visible}>{detail.visible ? "用户可见" : "已隐藏"}</i><i data-on={detail.enabled}>{detail.enabled ? "允许调用" : "已停用"}</i>{dirty && <b>有未保存修改</b>}{canDeleteSelectedModel && <button type="button" className={styles.textDanger} disabled={busy || dirty} onClick={deleteModel}>删除模型</button>}</div></header>
 
             {basic.visible && !basic.enabled && <div className={styles.inlineWarning}>用户可以看到，但当前无法调用。</div>}
+            {basic.status === "PUBLISHED" && basic.enabled && basic.routingMode === "MANAGED" && !detail.routes.some(operationalManagedRoute) && <div className={styles.inlineWarning}>无可用调用路由：该模型已发布并允许调用，但没有 enabled、upstream available、健康且渠道 ACTIVE 的 route。</div>}
 
             <div className={styles.editorSectionGrid}>
               <section className={styles.editorCard}>
