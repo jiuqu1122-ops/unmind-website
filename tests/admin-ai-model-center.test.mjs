@@ -95,6 +95,15 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /编辑渠道成本与能力/);
   assert.match(source, /继承模型能力/);
   assert.match(source, /capabilitiesOverride,/);
+  assert.match(source, /图片调用适配器/);
+  assert.match(source, /兼容旧逻辑 \/ Legacy/);
+  assert.match(source, /Seedream Images API/);
+  assert.match(source, /Grok Images API/);
+  assert.match(source, /Resolution 参数/);
+  assert.match(source, /Generation Endpoint/);
+  assert.match(source, /Edit Endpoint/);
+  assert.match(source, /\.\.\.\(adapterChanged \? \{ adapterKey \} : \{\}\)/);
+  assert.doesNotMatch(source, /<strong>Quality<\/strong>/);
   assert.match(source, /确认删除模型/);
   assert.match(source, /method: "DELETE"/);
   assert.match(source, /usage-model-bindings/);

@@ -5,6 +5,13 @@ export type AiModelStatus = "DRAFT" | "PUBLISHED" | "RETIRED";
 export type AiRoutingMode = "LEGACY" | "MANAGED";
 export type AiPricingMode = "MANUAL" | "MARKUP";
 export type AiUsageModelKey = "IMAGE_ANALYSIS" | "CANVAS_TEXT";
+export type ImageAdapterKey =
+  | "LEGACY"
+  | "GPT_IMAGE"
+  | "NANO_BANANA"
+  | "SEEDREAM_IMAGES_API"
+  | "GROK_IMAGES_API"
+  | "GENERIC_OPENAI_IMAGE";
 
 export type AiModelRoute = {
   id: string;
@@ -19,6 +26,8 @@ export type AiModelRoute = {
   lastSyncedAt: string | null;
   costProfile: JsonObject | null;
   capabilitiesOverride: JsonObject | null;
+  adapterKey: ImageAdapterKey | null;
+  adapterConfig: JsonObject | null;
   metadata: JsonObject | null;
   pricingSyncStatus: string;
   costUpdatedAt: string | null;

@@ -24,6 +24,7 @@ import {
   type AiModelModality,
   type AiModelRoute,
   type AiUpstreamDiscovery,
+  type ImageAdapterKey,
   type JsonObject,
 } from "./ai-model-center-model";
 import styles from "./admin.module.css";
@@ -46,6 +47,8 @@ type RouteDraft = {
   priority: string;
   costProfile: JsonObject;
   capabilitiesOverride: JsonObject | null;
+  adapterKey: ImageAdapterKey | "";
+  adapterConfig: JsonObject | null;
 };
 
 type CreateDraft = {
@@ -211,12 +214,46 @@ const priceDraftFor = (detail: AdminAiModelDetail) => {
   return next;
 };
 
-const routeDraftsFor = (routes: AiModelRoute[]) => Object.fromEntries(routes.map((route) => [route.id, {
+const imageAdapterOptions: Array<{ value: ImageAdapterKey | ""; label: string }> = [
+  { value: "", label: "兼容旧逻辑 / Legacy" },
+  { value: "GPT_IMAGE", label: "GPT Image" },
+  { value: "NANO_BANANA", label: "Nano Banana" },
+  { value: "SEEDREAM_IMAGES_API", label: "Seedream Images API" },
+  { value: "GROK_IMAGES_API", label: "Grok Images API" },
+  { value: "GENERIC_OPENAI_IMAGE", label: "Generic OpenAI Images" },
+];
+
+const imageAdapterConfigFor = (
+  adapterKey: ImageAdapterKey | "",
+  current: JsonObject | null,
+): JsonObject | null => {
+  if (adapterKey === "SEEDREAM_IMAGES_API") return {
+    resolutionParameter: "none",
+    resolutionValueMode: "label",
+    aspectRatioParameter: "none",
+    async: "inherit",
+    generationEndpoint: "/v1/images/generations",
+    editEndpoint: "/v1/images/edits",
+    ...cloneObject(current),
+  };
+  if (adapterKey === "GROK_IMAGES_API") return {
+    resolutionParameter: "none",
+    resolutionValueMode: "label",
+    aspectRatioParameter: "none",
+    generationEndpoint: "/v1/images/generations",
+    ...cloneObject(current),
+  };
+  return null;
+};
+
+const routeDraftsFor = (routes: AiModelRoute[]): Record<string, RouteDraft> => Object.fromEntries(routes.map((route) => [route.id, {
   priority: String(route.priority),
   costProfile: cloneObject(route.costProfile ?? { currency: "CNY" }),
   capabilitiesOverride: route.capabilitiesOverride === null
     ? null
     : cloneObject(route.capabilitiesOverride),
+  adapterKey: route.adapterKey ?? "",
+  adapterConfig: route.adapterConfig == null ? null : cloneObject(route.adapterConfig),
 }]));
 
 const bundleSignature = (bundle: DraftBundle) => JSON.stringify(bundle);
@@ -571,6 +608,59 @@ function CostEditor({ modality, value, onChange }: {
   return <div className={styles.costForm}><div className={styles.priceFieldGrid}><NumericInput label="每秒成本" unit="元 / 秒" value={value.cnyPerSecond} onChange={(next) => set(["cnyPerSecond"], next)} /><NumericInput label="每段成本" unit="元 / 段" value={value.cnyPerRequest} onChange={(next) => set(["cnyPerRequest"], next)} /></div></div>;
 }
 
+function ImageAdapterEditor({ value, onChange }: {
+  value: RouteDraft;
+  onChange: (next: RouteDraft) => void;
+}) {
+  const config = imageAdapterConfigFor(value.adapterKey, value.adapterConfig);
+  const setConfig = (key: string, next: unknown) => onChange({
+    ...value,
+    adapterConfig: { ...objectValue(config), [key]: next },
+  });
+  const setExactDimension = (resolution: string, aspectRatio: string, next: string) => {
+    const exactDimensions = cloneObject(objectValue(config?.exactDimensions));
+    const byResolution = cloneObject(objectValue(exactDimensions[resolution]));
+    byResolution[aspectRatio] = next;
+    exactDimensions[resolution] = byResolution;
+    setConfig("exactDimensions", exactDimensions);
+  };
+  const imagesApiAdapter = value.adapterKey === "SEEDREAM_IMAGES_API"
+    || value.adapterKey === "GROK_IMAGES_API";
+  return (
+    <div className={styles.structuredForm}>
+      <label>
+        <strong>图片调用适配器</strong>
+        <select
+          aria-label="图片调用适配器"
+          value={value.adapterKey}
+          onChange={(event) => {
+            const adapterKey = event.target.value as ImageAdapterKey | "";
+            onChange({
+              ...value,
+              adapterKey,
+              adapterConfig: imageAdapterConfigFor(adapterKey, null),
+            });
+          }}
+        >
+          {imageAdapterOptions.map((option) => <option key={option.value || "legacy"} value={option.value}>{option.label}</option>)}
+        </select>
+        <small>留空时完整沿用当前生产调用逻辑；只有主动选择后才会写入 Route。</small>
+      </label>
+      {imagesApiAdapter && config && (<>
+        <div className={styles.formGrid}>
+          <label><strong>Resolution 参数</strong><select aria-label="Resolution 参数" value={String(config.resolutionParameter ?? "none")} onChange={(event) => setConfig("resolutionParameter", event.target.value)}><option value="none">不发送</option><option value="size">size</option><option value="resolution">resolution</option></select></label>
+          <label><strong>Resolution 值</strong><select aria-label="Resolution 值" value={String(config.resolutionValueMode ?? "label")} onChange={(event) => setConfig("resolutionValueMode", event.target.value)}><option value="label">label（例如 2K）</option><option value="exact">exact（仅使用已配置映射）</option></select></label>
+          <label><strong>Aspect Ratio</strong><select aria-label="Aspect Ratio 参数" value={String(config.aspectRatioParameter ?? "none")} onChange={(event) => setConfig("aspectRatioParameter", event.target.value)}><option value="none">不发送</option><option value="aspect_ratio">aspect_ratio</option></select></label>
+          {value.adapterKey === "SEEDREAM_IMAGES_API" && <label><strong>Async</strong><select aria-label="Async 参数" value={String(config.async ?? "inherit")} onChange={(event) => setConfig("async", event.target.value === "true" ? true : event.target.value === "false" ? false : "inherit")}><option value="inherit">inherit（不发送）</option><option value="true">true</option><option value="false">false</option></select></label>}
+          <label><strong>Generation Endpoint</strong><input aria-label="Generation Endpoint" value={String(config.generationEndpoint ?? "/v1/images/generations")} onChange={(event) => setConfig("generationEndpoint", event.target.value)} /></label>
+          {value.adapterKey === "SEEDREAM_IMAGES_API" && <label><strong>Edit Endpoint</strong><input aria-label="Edit Endpoint" value={String(config.editEndpoint ?? "/v1/images/edits")} onChange={(event) => setConfig("editEndpoint", event.target.value)} /></label>}
+        </div>
+        {config.resolutionValueMode === "exact" && <details><summary>配置 exact dimension mapping</summary><p>只会发送这里明确填写的像素值；未配置的分辨率与比例组合会停止请求，不会猜测尺寸。</p><div className={styles.formGrid}>{["1K", "2K", "4K"].flatMap((resolution) => ["1:1", "16:9", "9:16", "3:2", "2:3", "4:3", "3:4"].map((aspectRatio) => <label key={`${resolution}:${aspectRatio}`}><strong>{resolution} · {aspectRatio}</strong><input aria-label={`${resolution} ${aspectRatio} exact dimension`} placeholder="例如 1672x941" value={String(objectValue(objectValue(config.exactDimensions)[resolution])[aspectRatio] ?? "")} onChange={(event) => setExactDimension(resolution, aspectRatio, event.target.value)} /></label>))}</div></details>}
+      </>)}
+    </div>
+  );
+}
+
 export function AiModelCenter({ request, providers, onError, onNotice, onUseLegacy }: Props) {
   const [supported, setSupported] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -808,6 +898,14 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
       : withoutBlankValues(draft.capabilitiesOverride) as JsonObject;
     const capabilitiesChanged = JSON.stringify(capabilitiesOverride)
       !== JSON.stringify(route.capabilitiesOverride);
+    const adapterKey = draft.adapterKey || null;
+    const adapterConfig = draft.adapterConfig === null
+      ? null
+      : withoutBlankValues(draft.adapterConfig) as JsonObject;
+    const adapterChanged = detail?.modality === "image"
+      && adapterKey !== (route.adapterKey ?? null);
+    const adapterConfigChanged = detail?.modality === "image"
+      && JSON.stringify(adapterConfig) !== JSON.stringify(route.adapterConfig ?? null);
     try {
       validateNumericTree(costProfile);
       if (capabilitiesOverride) validateNumericTree(capabilitiesOverride);
@@ -821,6 +919,8 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
         priority,
         costProfile,
         ...(capabilitiesChanged ? { capabilitiesOverride } : {}),
+        ...(adapterChanged ? { adapterKey } : {}),
+        ...(adapterConfigChanged ? { adapterConfig } : {}),
         expectedUpdatedAt: route.updatedAt,
       }),
     });
@@ -1210,6 +1310,8 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
                     capabilitiesOverride: route.capabilitiesOverride === null
                       ? null
                       : cloneObject(route.capabilitiesOverride),
+                    adapterKey: route.adapterKey ?? "",
+                    adapterConfig: route.adapterConfig == null ? null : cloneObject(route.adapterConfig),
                   };
                   const isDefault = detail.defaultRouteId === route.id;
                   return <article key={route.id}>
@@ -1219,6 +1321,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
                       <summary>编辑渠道成本与能力</summary>
                       <label><strong>优先级</strong><input type="number" min={0} value={routeDraft.priority} onChange={(event) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, priority: event.target.value } }))} /></label>
                       <CostEditor modality={detail.modality} value={routeDraft.costProfile} onChange={(costProfile) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, costProfile } }))} />
+                      {detail.modality === "image" && <ImageAdapterEditor value={routeDraft} onChange={(next) => setRouteDrafts((current) => ({ ...current, [route.id]: next }))} />}
                       <label className={styles.inlineCheck}>
                         <input
                           type="checkbox"
@@ -1248,7 +1351,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
                       )}
                       <button type="button" disabled={busy} onClick={() => void saveRoute(route)}>保存渠道设置</button>
                     </details>
-                    <footer>{!isDefault && route.enabled && <button type="button" className={styles.ghost} onClick={() => void setDefaultRoute(route)}>设为默认</button>}<button type="button" className={styles.ghost} onClick={() => { setRemapRoute(route); setRemapTarget(""); setRemapQuery(""); }}>更改映射</button><button type="button" className={route.enabled ? styles.textDanger : styles.ghost} onClick={() => void toggleRoute(route, !route.enabled)}>{route.enabled ? "停用" : "启用"}</button><details><summary>更多</summary><div><button type="button" className={styles.textDanger} disabled={!route.channelId} onClick={() => unmapRoute(route)}>解除映射</button><details><summary>高级信息</summary><pre>{formatJson({ routeId: route.id, canonicalModelId: route.canonicalModelId, upstreamModelId: route.upstreamModelId, provider: route.provider, pricingSyncStatus: route.pricingSyncStatus, capabilitiesOverride: route.capabilitiesOverride, metadata: route.metadata })}</pre></details></div></details></footer>
+                    <footer>{!isDefault && route.enabled && <button type="button" className={styles.ghost} onClick={() => void setDefaultRoute(route)}>设为默认</button>}<button type="button" className={styles.ghost} onClick={() => { setRemapRoute(route); setRemapTarget(""); setRemapQuery(""); }}>更改映射</button><button type="button" className={route.enabled ? styles.textDanger : styles.ghost} onClick={() => void toggleRoute(route, !route.enabled)}>{route.enabled ? "停用" : "启用"}</button><details><summary>更多</summary><div><button type="button" className={styles.textDanger} disabled={!route.channelId} onClick={() => unmapRoute(route)}>解除映射</button><details><summary>高级信息</summary><pre>{formatJson({ routeId: route.id, canonicalModelId: route.canonicalModelId, upstreamModelId: route.upstreamModelId, provider: route.provider, pricingSyncStatus: route.pricingSyncStatus, capabilitiesOverride: route.capabilitiesOverride, adapterKey: route.adapterKey, adapterConfig: route.adapterConfig, metadata: route.metadata })}</pre></details></div></details></footer>
                   </article>;
                 })}{!detail.routes.length && <div className={styles.noUpstream}><strong>暂无可用上游</strong><p>请从“未映射”页面添加渠道，或继续使用旧版兼容配置。</p></div>}</div>
               </section>
