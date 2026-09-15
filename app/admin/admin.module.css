@@ -163,8 +163,43 @@
 .materialPricingTitle span { color: #7b8799; font-size: 9px; }
 .saveBar { position: sticky; bottom: 12px; z-index: 1; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #d9e1ee; border-radius: 13px; background: rgba(255,255,255,.94); box-shadow: 0 12px 30px rgba(35,57,96,.1); color: #71809a; font-size: 10px; backdrop-filter: blur(10px); }
 .saveBar button:disabled { cursor: wait; opacity: .55; }
+.usageDashboard { margin-top: 16px; display: grid; gap: 14px; }
+.usageHeader { padding: 22px 24px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; border: 1px solid #e0e6f0; border-radius: 20px; background: white; }
+.usageHeader > div { min-width: 0; }
+.usageHeader span { color: #2f72ff; font-size: 9px; font-weight: 900; letter-spacing: .17em; }
+.usageHeader h2 { margin: 5px 0 6px; color: #172033; font-size: 25px; letter-spacing: -.035em; }
+.usageHeader p { max-width: 760px; margin: 0; color: #758198; font-size: 11px; line-height: 1.7; }
+.usageHeader button { min-height: 38px; padding: 0 13px; border-radius: 10px; font-size: 10px; font-weight: 850; cursor: pointer; white-space: nowrap; }
+.usageHeader button:disabled { cursor: wait; opacity: .55; }
+.usageActions { display: flex; align-items: flex-end; gap: 8px; }
+.usageActions label { min-width: 250px; display: grid; gap: 5px; }
+.usageActions label > span { color: #71809a; font-size: 8px; letter-spacing: normal; }
+.usageActions select { width: 100%; min-height: 38px; padding: 0 32px 0 10px; border: 1px solid #d9e1ee; border-radius: 10px; outline: none; background: #f9fbff; color: #26344b; font: inherit; font-size: 10px; }
+.usageActions select:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
+.usageMetrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+.usageMetrics article { min-width: 0; padding: 18px; display: grid; gap: 6px; border: 1px solid #e0e6f0; border-radius: 17px; background: white; }
+.usageMetrics article[data-warning="true"] { border-color: #efd7a8; background: #fffaf0; }
+.usageMetrics span,.usageMetrics small { color: #8190a7; font-size: 9px; font-weight: 700; }
+.usageMetrics strong { overflow: hidden; color: #1c2c49; font-size: 24px; letter-spacing: -.035em; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.usageTableWrap { overflow-x: auto; border: 1px solid #e0e6f0; border-radius: 20px; background: white; }
+.usageTable { width: 100%; min-width: 1040px; border-collapse: collapse; font-size: 10px; font-variant-numeric: tabular-nums; }
+.usageTable th { padding: 11px 14px; border-bottom: 1px solid #e3e8f0; background: #f7f9fc; color: #7b8799; font-size: 9px; font-weight: 850; text-align: right; white-space: nowrap; }
+.usageTable th:first-child { text-align: left; }
+.usageTable td { padding: 12px 14px; border-bottom: 1px solid #edf0f5; color: #59677e; text-align: right; white-space: nowrap; }
+.usageTable tbody tr:last-child td { border-bottom: 0; }
+.usageTable tbody tr:hover { background: #f8faff; }
+.usageTable td:first-child { min-width: 220px; text-align: left; }
+.usageTable td:first-child button { max-width: 240px; padding: 0; display: grid; gap: 3px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.usageTable td:first-child strong,.usageTable td:first-child small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usageTable td:first-child strong { color: #244e9b; font-size: 11px; }
+.usageTable td:first-child small { color: #8a96a9; font-size: 8px; }
+.usageTable td > strong { color: #1c2c49; }
+.usageTable td > span { padding: 5px 8px; border-radius: 99px; background: #e8f7f1; color: #16835f; font-size: 8px; font-weight: 850; }
+.usageTable td > span[data-warning="true"] { background: #fff1dd; color: #a7610a; }
+.usageFootnote { margin: 0; color: #7e8a9d; font-size: 9px; line-height: 1.6; }
 @media (max-width: 980px) {
   .metrics { grid-template-columns: repeat(2,1fr); }
+  .usageMetrics { grid-template-columns: repeat(2,1fr); }
   .twoColumns { grid-template-columns: 1fr; }
   .providerShell { grid-template-columns: 1fr; }
   .reviewGrid { grid-template-columns: repeat(2,1fr); }
@@ -178,6 +213,10 @@
   .console { width: calc(100% - 28px); padding-top: 32px; }
   .consoleHead { align-items: flex-start; flex-direction: column; }
   .metrics { grid-template-columns: 1fr 1fr; }
+  .usageHeader { padding: 18px; align-items: stretch; flex-direction: column; }
+  .usageActions { align-items: stretch; flex-direction: column; }
+  .usageActions label { min-width: 0; }
+  .usageMetrics { grid-template-columns: 1fr 1fr; }
   .tabs { overflow-x: auto; }
   .tabs button { white-space: nowrap; }
   .reviewGrid { grid-template-columns: 1fr; }

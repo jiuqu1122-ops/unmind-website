@@ -78,3 +78,15 @@ test("fast Banana pricing has independent 2K and 4K rows", () => {
   assert.equal(pricingLabel("nano-banana-pro-fast"), "Nano Banana Pro（稳定高速）");
   assert.equal(pricingLabel("nano-banana-2-fast"), "Nano Banana 2（稳定高速）");
 });
+
+test("admin console exposes daily per-user image and token usage", async () => {
+  const source = await readFile(new URL("../app/admin/admin-console.tsx", import.meta.url), "utf8");
+  assert.match(source, /\/v1\/admin\/usage\/today/);
+  assert.match(source, />使用统计</);
+  assert.match(source, />今日生图</);
+  assert.match(source, />Token 总消耗</);
+  assert.match(source, /选择生图模型/);
+  assert.match(source, /totals\.imageModels\.map/);
+  assert.match(source, /成功请求未上报/);
+  assert.match(source, /缓存命中已包含在输入中，不重复相加/);
+});

@@ -271,6 +271,41 @@ const defaultProviderCapabilities = (kind: AdminProviderKind): AdminProviderCapa
   return ["LLM"];
 };
 
+export type AdminTodayUsageCounts = {
+  imageRequests: number;
+  imageCount: string;
+  tokenRequests: number;
+  tokenRequestsWithUsage: number;
+  tokenRequestsWithoutUsage: number;
+  inputTokens: string;
+  cachedInputTokens: string;
+  cacheWriteTokens: string;
+  outputTokens: string;
+  totalTokens: string;
+  imageModels: AdminTodayUsageImageModel[];
+};
+
+export type AdminTodayUsageImageModel = {
+  key: string;
+  displayName: string;
+  imageRequests: number;
+  imageCount: string;
+};
+
+export type AdminTodayUsage = {
+  date: string;
+  timeZone: string;
+  range: { start: string; end: string };
+  generatedAt: string;
+  totals: AdminTodayUsageCounts & { activeUsers: number };
+  items: Array<AdminTodayUsageCounts & {
+    userId: string;
+    email: string | null;
+    displayName: string | null;
+    status: string;
+  }>;
+};
+
 export const newProviderDraft = (kind: AdminProviderKind = "NEW_API"): ProviderDraft => ({
   id: null,
   kind,

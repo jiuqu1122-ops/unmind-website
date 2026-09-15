@@ -18,6 +18,7 @@ import {
   type AdminOverview,
   type AdminProvider,
   type AdminProviderKind,
+  type AdminTodayUsage,
   type AdminUser,
   type AdminUserDetail,
   type AdminReferralRule,
@@ -31,7 +32,7 @@ import { AiModelCenter } from "./ai-model-center";
 import type { AdminAiModelSummary } from "./ai-model-center-model";
 import styles from "./admin.module.css";
 
-type Tab = "users" | "membership" | "codes" | "providers" | "models" | "pricing" | "reviews";
+type Tab = "users" | "usage" | "membership" | "codes" | "providers" | "models" | "pricing" | "reviews";
 type AuthorizationStatus = "ACTIVE" | "SUSPENDED" | "DISABLED";
 
 const formatCredits = (value?: string | null) => {
@@ -46,6 +47,12 @@ const formatCredits = (value?: string | null) => {
   const whole = hundredths / 100n;
   const cents = (hundredths % 100n).toString().padStart(2, "0");
   return `${sign}${whole.toLocaleString("zh-CN")}.${cents}`;
+};
+
+const formatWholeNumber = (value?: string | number | null) => {
+  const normalized = String(value ?? "0").trim();
+  if (!/^\d+$/.test(normalized)) return normalized || "0";
+  return BigInt(normalized).toLocaleString("zh-CN");
 };
 
 const ledgerPresentation = (entry: AdminLedgerEntry) => {
@@ -104,6 +111,8 @@ export function AdminConsole() {
   const [adminKeyInput, setAdminKeyInput] = useState("");
   const [adminKey, setAdminKey] = useState("");
   const [overview, setOverview] = useState<AdminOverview | null>(null);
+  const [todayUsage, setTodayUsage] = useState<AdminTodayUsage | null>(null);
+  const [usageImageModel, setUsageImageModel] = useState("all");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
   const [authorizationName, setAuthorizationName] = useState("");
@@ -177,8 +186,9 @@ export function AdminConsole() {
 
   const refreshDashboard = useCallback(async (credential: string, search = "") => {
     const queryString = search ? `?query=${encodeURIComponent(search)}&limit=80` : "?limit=80";
-    const [nextOverview, userPage, codePage, sharePage, providerPage, nextPricing, nextChatPricing] = await Promise.all([
+    const [nextOverview, nextTodayUsage, userPage, codePage, sharePage, providerPage, nextPricing, nextChatPricing] = await Promise.all([
       request<AdminOverview>("/v1/admin/overview", {}, credential),
+      request<AdminTodayUsage>("/v1/admin/usage/today", {}, credential),
       request<{ items: AdminUser[] }>(`/v1/admin/users${queryString}`, {}, credential),
       request<{ items: RedemptionCode[] }>("/v1/admin/redemption-codes?limit=200", {}, credential),
       request<{ items: ReviewShare[] }>("/v1/admin/inspiration-space?limit=200", {}, credential),
@@ -187,6 +197,7 @@ export function AdminConsole() {
       request<AdminChatPricing>("/v1/admin/chat-pricing", {}, credential),
     ]);
     setOverview(nextOverview);
+    setTodayUsage(nextTodayUsage);
     setUsers(userPage.items);
     setCodes(codePage.items);
     setReviews(sharePage.items);
@@ -224,6 +235,16 @@ export function AdminConsole() {
       if (selected) setProviderDraft(providerToDraft(selected));
     }
     return page.items;
+  };
+
+  const refreshTodayUsage = async () => {
+    const nextUsage = await request<AdminTodayUsage>("/v1/admin/usage/today");
+    setTodayUsage(nextUsage);
+    setUsageImageModel((current) => (
+      current === "all" || nextUsage.totals.imageModels.some((model) => model.key === current)
+        ? current
+        : "all"
+    ));
   };
 
   const refreshMembershipPlans = async () => {
@@ -427,6 +448,8 @@ export function AdminConsole() {
   const disconnect = () => {
     setAdminKey("");
     setOverview(null);
+    setTodayUsage(null);
+    setUsageImageModel("all");
     setUsers([]);
     setSelectedUser(null);
     setCodes([]);
@@ -910,6 +933,19 @@ export function AdminConsole() {
     }
   };
 
+  const usageModel = usageImageModel === "all"
+    ? null
+    : todayUsage?.totals.imageModels.find((model) => model.key === usageImageModel) ?? null;
+  const selectedImageUsage = (item: AdminTodayUsage["items"][number] | AdminTodayUsage["totals"]) => (
+    usageImageModel === "all"
+      ? { imageCount: item.imageCount, imageRequests: item.imageRequests }
+      : item.imageModels.find((model) => model.key === usageImageModel)
+        ?? { imageCount: "0", imageRequests: 0 }
+  );
+  const selectedImageTotals = todayUsage
+    ? selectedImageUsage(todayUsage.totals)
+    : { imageCount: "0", imageRequests: 0 };
+
   if (!adminKey) {
     return (
       <section className={styles.loginShell}>
@@ -944,6 +980,7 @@ export function AdminConsole() {
 
       <nav className={styles.tabs} aria-label="后台功能">
         <button className={tab === "users" ? styles.active : ""} onClick={() => setTab("users")}>用户与额度</button>
+        <button className={tab === "usage" ? styles.active : ""} onClick={() => setTab("usage")}>使用统计</button>
         <button className={tab === "codes" ? styles.active : ""} onClick={() => setTab("codes")}>兑换码</button>
         <button className={tab === "providers" ? styles.active : ""} onClick={() => setTab("providers")}>渠道管理</button>
         <button className={tab === "models" ? styles.active : ""} onClick={() => setTab("models")}>AI Model Center</button>
@@ -953,6 +990,70 @@ export function AdminConsole() {
       </nav>
 
       {(error || notice) && <div className={error ? styles.error : styles.notice}>{error || notice}</div>}
+
+      {tab === "usage" && (
+        <section className={styles.usageDashboard}>
+          <header className={styles.usageHeader}>
+            <div>
+              <span>DAILY AI USAGE</span>
+              <h2>{todayUsage?.date || "今日"} 使用统计</h2>
+              <p>按中国标准时间（UTC+8）自然日统计成功请求。Token 总量 = 输入 + 输出 + 缓存写入，缓存命中已包含在输入中，不重复相加。</p>
+            </div>
+            <div className={styles.usageActions}>
+              <label>
+                <span>选择生图模型</span>
+                <select value={usageImageModel} onChange={(event) => setUsageImageModel(event.target.value)}>
+                  <option value="all">全部生图模型（{formatWholeNumber(todayUsage?.totals.imageCount)} 张）</option>
+                  {todayUsage?.totals.imageModels.map((model) => <option key={model.key} value={model.key}>{model.displayName}（{formatWholeNumber(model.imageCount)} 张）</option>)}
+                </select>
+              </label>
+              <button className={styles.ghost} type="button" disabled={busy} onClick={() => {
+                setBusy(true);
+                clearMessage();
+                void refreshTodayUsage()
+                  .catch((reason) => setError(reason instanceof Error ? reason.message : "使用统计刷新失败"))
+                  .finally(() => setBusy(false));
+              }}>{busy ? "刷新中…" : "刷新统计"}</button>
+            </div>
+          </header>
+
+          <div className={styles.usageMetrics}>
+            <article><span>今日活跃用户</span><strong>{todayUsage?.totals.activeUsers ?? 0}</strong><small>有成功图片或文字请求</small></article>
+            <article><span>今日生图</span><strong>{formatWholeNumber(selectedImageTotals.imageCount)}</strong><small>{usageModel?.displayName || "全部生图模型"} · {selectedImageTotals.imageRequests} 次请求</small></article>
+            <article><span>Token 总消耗</span><strong>{formatWholeNumber(todayUsage?.totals.totalTokens)}</strong><small>输入、输出与缓存写入合计</small></article>
+            <article data-warning={Boolean(todayUsage?.totals.tokenRequestsWithoutUsage)}>
+              <span>Token 数据覆盖</span>
+              <strong>{todayUsage?.totals.tokenRequestsWithUsage ?? 0}/{todayUsage?.totals.tokenRequests ?? 0}</strong>
+              <small>{todayUsage?.totals.tokenRequestsWithoutUsage ? `${todayUsage.totals.tokenRequestsWithoutUsage} 次成功请求未上报` : "全部成功请求已上报"}</small>
+            </article>
+          </div>
+
+          <div className={styles.usageTableWrap}>
+            <table className={styles.usageTable}>
+              <thead><tr><th>用户</th><th>生图张数（{usageModel?.displayName || "全部模型"}）</th><th>图片请求</th><th>Token 总量</th><th>输入</th><th>输出</th><th>缓存写入</th><th>Token 上报</th></tr></thead>
+              <tbody>
+                {todayUsage?.items.map((item) => {
+                  const imageUsage = selectedImageUsage(item);
+                  return (
+                    <tr key={item.userId}>
+                      <td><button type="button" onClick={() => { setTab("users"); void openUser(item.userId); }}><strong>{item.displayName || item.email || "未命名用户"}</strong><small>{item.email || item.userId}</small></button></td>
+                      <td>{formatWholeNumber(imageUsage.imageCount)}</td>
+                      <td>{imageUsage.imageRequests}</td>
+                      <td><strong>{formatWholeNumber(item.totalTokens)}</strong></td>
+                      <td>{formatWholeNumber(item.inputTokens)}</td>
+                      <td>{formatWholeNumber(item.outputTokens)}</td>
+                      <td>{formatWholeNumber(item.cacheWriteTokens)}</td>
+                      <td><span data-warning={Boolean(item.tokenRequestsWithoutUsage)}>{item.tokenRequestsWithUsage}/{item.tokenRequests}{item.tokenRequestsWithoutUsage ? ` · ${item.tokenRequestsWithoutUsage} 次未上报` : ""}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {!todayUsage?.items.length && <p className={styles.empty}>今天还没有成功的图片或文字请求</p>}
+          </div>
+          <p className={styles.usageFootnote}>统计生成于 {formatDateTime(todayUsage?.generatedAt)} · 时区 {todayUsage?.timeZone || "Asia/Shanghai"} · “未上报”表示上游成功响应未包含 Token usage，不会按 0 计入。</p>
+        </section>
+      )}
 
       {tab === "users" && (
         <div className={styles.twoColumns}>
