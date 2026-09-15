@@ -16,6 +16,9 @@ When the user says “给我部署代码” for this repository, treat it as a d
 set -euo pipefail
 cd /opt/unmind-website
 git status --short
+if ! git diff --quiet -- scripts/deploy.sh; then
+  git stash push -m "pre-deploy local scripts/deploy.sh" -- scripts/deploy.sh
+fi
 git pull --ff-only origin main
 expected_sha="$(git rev-parse HEAD)"
 chmod +x scripts/deploy.sh
@@ -26,6 +29,8 @@ curl --fail --location --show-error --head https://www.unmind.art/admin/
 ```
 
 The deployment script derives `WEBSITE_IMAGE=ghcr.io/jiuqu1122-ops/unmind-website:sha-<current Git SHA>` after pulling and exports it before Compose runs. This is required because production `.env` may contain an older pinned `WEBSITE_IMAGE`; Compose previously used that stale value even while the script printed `latest`. Always verify the running container image against `expected_sha` as shown above.
+
+Keep `scripts/deploy.sh` tracked as executable mode `100755`. It was previously tracked as `100644`, so running `chmod +x` left production showing `M scripts/deploy.sh` and could block the next pull when that script changed. The path-scoped stash in the command block preserves any legacy local copy without stashing `.env` or unrelated files; do not automatically pop that old deployment-script stash over the new script.
 
 The production `.env` and its keys already live under `/opt/unmind-website` for the root deployment. Never print, replace, upload, commit, or recreate that file. Do not build the website on the production server; deploy the prebuilt GHCR image produced by GitHub Actions. Never use `docker compose down -v` in this workflow. Verify the final HTTPS URL with `/admin/` and `curl --location`; an HTTP 301 alone is not success. Nginx must keep directory redirects relative (`absolute_redirect off`) because it receives HTTP from Caddy internally and must not emit an `http://www.unmind.art/...` Location header.
 
