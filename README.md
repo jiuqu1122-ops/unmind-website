@@ -22,7 +22,8 @@ NEXT_PUBLIC_MOBILE_DOWNLOAD_URL=https://api.unmind.art/v1/mobile/apk
 NEXT_PUBLIC_API_BASE_URL=https://api.unmind.art
 ```
 
-这些变量会在静态构建时写入页面，修改后需要重新构建网站。
+`NEXT_PUBLIC_*` 变量会在静态构建时写入页面，修改后需要重新构建网站。
+`WEBSITE_IMAGE` 只用于容器部署；标准部署脚本默认自动选择当前提交对应的不可变镜像。
 
 ## 本地开发与验证
 
@@ -34,7 +35,8 @@ npm run build
 ```
 
 生产环境不会在 2 GiB 服务器上编译。合并到 `main` 后，GitHub Actions 会构建并推送
-`ghcr.io/jiuqu1122-ops/unmind-website:latest`；服务器上的 `scripts/deploy.sh`
+`ghcr.io/jiuqu1122-ops/unmind-website:latest` 和不可变的 `sha-*` 标签；服务器上的 `scripts/deploy.sh`
+会自动拉取与当前 Git 提交完全对应的 `sha-*` 镜像，
 只拉取镜像并重启官网容器。四个 `NEXT_PUBLIC_*` 构建参数可在 GitHub 仓库的
 `Settings → Secrets and variables → Actions → Variables` 中配置。
 

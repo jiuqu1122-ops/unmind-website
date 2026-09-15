@@ -90,3 +90,15 @@ test("admin console exposes daily per-user image and token usage", async () => {
   assert.match(source, /成功请求未上报/);
   assert.match(source, /缓存命中已包含在输入中，不重复相加/);
 });
+
+test("production deployment pins the current prebuilt image and preserves HTTPS redirects", async () => {
+  const [deploy, nginx] = await Promise.all([
+    readFile(new URL("../scripts/deploy.sh", import.meta.url), "utf8"),
+    readFile(new URL("../nginx.conf", import.meta.url), "utf8"),
+  ]);
+  assert.match(deploy, /:sha-\$\{source_revision\}/);
+  assert.match(deploy, /export WEBSITE_IMAGE=/);
+  assert.match(deploy, /docker compose pull website/);
+  assert.doesNotMatch(deploy, /docker compose build/);
+  assert.match(nginx, /absolute_redirect off;/);
+});

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-/opt/unmind-website}"
+WEBSITE_IMAGE_REPOSITORY="${WEBSITE_IMAGE_REPOSITORY:-ghcr.io/jiuqu1122-ops/unmind-website}"
 
 cd "$PROJECT_DIR"
 
@@ -16,8 +17,15 @@ docker network inspect inspiration_backend >/dev/null 2>&1 || {
 }
 
 git pull --ff-only
-echo "Pulling prebuilt website image: ${WEBSITE_IMAGE:-ghcr.io/jiuqu1122-ops/unmind-website:latest}"
-docker compose pull website
+source_revision="$(git rev-parse HEAD 2>/dev/null)" || { echo "Cannot resolve the Git revision for the prebuilt image" >&2; exit 1; }
+deployment_image="${WEBSITE_IMAGE:-${WEBSITE_IMAGE_REPOSITORY}:sha-${source_revision}}"
+export WEBSITE_IMAGE="$deployment_image"
+
+echo "Pulling prebuilt website image: $WEBSITE_IMAGE"
+if ! docker compose pull website; then
+  echo "Prebuilt image pull failed. Confirm that the 'Build website image' GitHub Actions run for $source_revision succeeded and that this server can read the GHCR package." >&2
+  exit 1
+fi
 docker compose up -d --no-build website
 
 container_id="$(docker compose ps -q website)"

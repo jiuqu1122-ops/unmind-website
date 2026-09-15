@@ -65,9 +65,11 @@ NEXT_PUBLIC_DOWNLOAD_URL=https://download.example.com/InspirationDrawer-Setup.ex
 NEXT_PUBLIC_MACOS_DOWNLOAD_URL=https://download.example.com/Inspiration-Drawer-macOS-Preview.zip
 ```
 
-`WEBSITE_IMAGE` 是服务器需要拉取的预构建镜像。四个 `NEXT_PUBLIC_*` 地址会写入静态
-构建产物，请在 GitHub 仓库的 `Settings → Secrets and variables → Actions → Variables`
-中配置；修改后重新运行 `Build website image` 工作流。
+`WEBSITE_IMAGE` 是可选的镜像覆盖值。标准部署脚本会根据当前 Git 提交自动选择
+`ghcr.io/jiuqu1122-ops/unmind-website:sha-<完整提交哈希>`，不会被 `.env` 中遗留的旧镜像
+标签覆盖。四个 `NEXT_PUBLIC_*` 地址会写入静态构建产物，请在 GitHub 仓库的
+`Settings → Secrets and variables → Actions → Variables` 中配置；修改后重新运行
+`Build website image` 工作流。
 
 灵感空间和网页管理后台依赖后端新接口。上线网站前，先在后端服务器执行数据库迁移，并确保后端 `.env` 包含：
 
@@ -79,10 +81,9 @@ CORS_ALLOWED_ORIGINS=https://www.unmind.art,https://unmind.art
 
 ```bash
 cd /opt/inspiration-wallet-server
+./scripts/backup-postgres.sh
 git pull --ff-only origin main
-docker compose build api worker
-docker compose run --rm --no-deps api npm run prisma:migrate:deploy
-docker compose up -d api worker
+PROJECT_DIR=/opt/inspiration-wallet-server ./scripts/deploy.sh
 ```
 
 不要把 `ADMIN_API_KEY` 写进官网 `.env`。管理员在 `/admin` 页面手动输入密钥，密钥只保留在该浏览器页面的内存中。
@@ -95,12 +96,13 @@ docker compose up -d api worker
 docker network inspect inspiration_backend >/dev/null
 ```
 
-然后拉取 GitHub Actions 已构建的镜像并启动。不要在 2 GiB 服务器上构建：
+然后确认目标提交的 GitHub Actions 镜像已经构建成功，运行标准脚本。脚本会使用当前
+Git 提交对应的不可变 `sha-*` 镜像；不要在 2 GiB 服务器上构建：
 
 ```bash
 cd /opt/unmind-website
-docker compose pull website
-docker compose up -d --no-build website
+chmod +x scripts/deploy.sh
+PROJECT_DIR=/opt/unmind-website ./scripts/deploy.sh
 docker compose ps
 ```
 
@@ -166,7 +168,7 @@ curl -I -H 'Origin: https://www.unmind.art' https://api.unmind.art/v1/inspiratio
 cd /opt/unmind-website
 chmod +x scripts/deploy.sh
 ./scripts/deploy.sh
-curl -I https://www.unmind.art
+curl --fail --location --show-error --head https://www.unmind.art/admin/
 ```
 
 查看日志：
