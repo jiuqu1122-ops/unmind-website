@@ -110,6 +110,10 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /IMAGE_ANALYSIS/);
   assert.match(source, /CANVAS_TEXT/);
   assert.match(source, /USAGE_MODEL_NOT_AVAILABLE/);
+  assert.match(source, /JSON\.stringify\(\{ canonicalModelKey: target \}\)/);
+  assert.match(source, /body: JSON\.stringify\(draft\)/);
+  assert.doesNotMatch(source, /canonicalModelKey: target, expectedUpdatedAt: discovery\.updatedAt/);
+  assert.doesNotMatch(source, /\.\.\.draft, expectedUpdatedAt: discovery\.updatedAt/);
   assert.doesNotMatch(source, /<textarea/);
   assert.doesNotMatch(source, /<input[^>]+upstreamModelId/);
 });

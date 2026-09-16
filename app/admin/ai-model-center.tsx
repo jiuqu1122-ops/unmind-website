@@ -1031,7 +1031,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
     }
     await perform(() => request(`/v1/admin/ai-models/unmapped/${encodeURIComponent(discovery.id)}/map`, {
       method: "POST",
-      body: JSON.stringify({ canonicalModelKey: target, expectedUpdatedAt: discovery.updatedAt }),
+      body: JSON.stringify({ canonicalModelKey: target }),
     }), `${discovery.upstreamModelId} 已映射；新渠道默认保持停用`, target);
   };
 
@@ -1046,7 +1046,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
     }
     await perform(() => request(`/v1/admin/ai-models/unmapped/${encodeURIComponent(discovery.id)}/create`, {
       method: "POST",
-      body: JSON.stringify({ ...draft, expectedUpdatedAt: discovery.updatedAt }),
+      body: JSON.stringify(draft),
     }), "新模型已创建并完成映射；上游渠道默认保持停用", draft.canonicalModelKey);
   };
 
