@@ -49,6 +49,17 @@
 .membershipFormHeader { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #23324d; font-size: 13px; }
 .membershipFormHeader button { min-height: 34px; padding: 0 11px; font-size: 10px; }
 .membershipModelHint { padding: 10px 12px; border-radius: 10px; background: #f4f7fc; color: #728099; font-size: 10px; line-height: 1.6; }
+.membershipQuotaEditor { padding-top: 14px; display: grid; gap: 10px; border-top: 1px solid #edf0f5; }
+.membershipQuotaHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.membershipQuotaHeader > span { min-width: 0; display: grid; gap: 3px; }
+.membershipQuotaHeader strong { color: #31415f; font-size: 11px; }
+.membershipQuotaHeader small,.membershipQuotaEmpty { margin: 0; color: #8490a3; font-size: 9px; line-height: 1.5; }
+.membershipQuotaHeader button { min-height: 32px; padding: 0 10px; font-size: 10px; white-space: nowrap; }
+.membershipQuotaRow { padding: 10px 0; display: grid; grid-template-columns: minmax(190px,1.4fr) minmax(90px,.55fr) minmax(120px,.7fr) auto; align-items: end; gap: 8px; border-bottom: 1px solid #edf0f5; }
+.membershipQuotaRow label { min-width: 0; display: grid; gap: 6px; color: #4e5b70; font-size: 10px; }
+.membershipQuotaRow input,.membershipQuotaRow select { width: 100%; min-width: 0; min-height: 38px; padding: 0 10px; border: 1px solid #d9e1ee; border-radius: 9px; outline: none; background: #f9fbff; color: #172033; font: inherit; font-size: 10px; }
+.membershipQuotaRow input:focus,.membershipQuotaRow select:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
+.membershipQuotaRow > button { min-height: 38px; padding: 0 10px; font-size: 10px; }
 .referralSection { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid #edf0f5; color: #31415f; font-size: 12px; }
 .referralSection span { color: #8a96a9; font-size: 10px; }
 .codeList article > button { min-height: 32px; padding: 0 11px; font-size: 10px; }
@@ -173,6 +184,7 @@
 .usageHeader button:disabled { cursor: wait; opacity: .55; }
 .usageActions { display: flex; align-items: flex-end; gap: 8px; }
 .usageActions label { min-width: 250px; display: grid; gap: 5px; }
+.usageActions label.usagePeriodSelect { min-width: 116px; }
 .usageActions label > span { color: #71809a; font-size: 8px; letter-spacing: normal; }
 .usageActions select { width: 100%; min-height: 38px; padding: 0 32px 0 10px; border: 1px solid #d9e1ee; border-radius: 10px; outline: none; background: #f9fbff; color: #26344b; font: inherit; font-size: 10px; }
 .usageActions select:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
@@ -223,7 +235,8 @@
   .panel { min-height: 0; }
   .loginCard { padding: 26px 20px; }
   .walletGrid { grid-template-columns: repeat(2,1fr); }
-  .formGridThree,.formGrid,.basePricingGrid,.advancedGrid,.membershipPriceGrid { grid-template-columns: 1fr; }
+  .formGridThree,.formGrid,.basePricingGrid,.advancedGrid,.membershipPriceGrid,.membershipQuotaRow { grid-template-columns: 1fr; }
+  .membershipQuotaRow > button { justify-self: start; }
   .customPriceRow { grid-template-columns: 1fr; }
   .imagePricingList article { grid-template-columns: 1fr 1fr; }
   .imagePricingList article > strong { grid-column: 1 / -1; padding-bottom: 0; }

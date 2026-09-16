@@ -5,6 +5,9 @@ import { apiBaseUrl } from "../site-shared";
 import {
   newProviderDraft,
   normalizePricing,
+  adminUsagePeriodLabel,
+  membershipQuotasFromFreeQuota,
+  membershipQuotaTypeForModality,
   pricingLabel,
   providerKinds,
   providerMeta,
@@ -15,6 +18,7 @@ import {
   type AdminChatTokenRates,
   type AdminLedgerEntry,
   type AdminMembershipPlan,
+  type AdminMembershipQuotaPeriod,
   type AdminOverview,
   type AdminProvider,
   type AdminProviderKind,
@@ -79,6 +83,11 @@ const creditPattern = /^(?:0|[1-9]\d{0,6})$/;
 const membershipDiscountPattern = /^(?:0|[1-9](?:\.\d{1,2})?|10(?:\.0{1,2})?)$/;
 type MembershipDiscountKey = "gptImage1K" | "chat" | "video" | "other";
 type MembershipDiscountDraft = Record<MembershipDiscountKey, string>;
+type MembershipQuotaDraft = {
+  canonicalModelId: string;
+  period: AdminMembershipQuotaPeriod;
+  limit: string;
+};
 
 const emptyMembershipDiscounts = (): MembershipDiscountDraft => ({
   gptImage1K: "10",
@@ -112,6 +121,7 @@ export function AdminConsole() {
   const [adminKey, setAdminKey] = useState("");
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [todayUsage, setTodayUsage] = useState<AdminTodayUsage | null>(null);
+  const [usageDays, setUsageDays] = useState(1);
   const [usageImageModel, setUsageImageModel] = useState("all");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
@@ -132,6 +142,7 @@ export function AdminConsole() {
   const [membershipCode, setMembershipCode] = useState("pro");
   const [membershipName, setMembershipName] = useState("Pro");
   const [membershipDiscountDraft, setMembershipDiscountDraft] = useState<MembershipDiscountDraft>(() => emptyMembershipDiscounts());
+  const [membershipQuotaDrafts, setMembershipQuotaDrafts] = useState<MembershipQuotaDraft[]>([]);
   const [membershipDays, setMembershipDays] = useState("30");
   const [membershipGrantPlan, setMembershipGrantPlan] = useState("");
   const [ruleInviterCredits, setRuleInviterCredits] = useState("100");
@@ -188,7 +199,7 @@ export function AdminConsole() {
     const queryString = search ? `?query=${encodeURIComponent(search)}&limit=80` : "?limit=80";
     const [nextOverview, nextTodayUsage, userPage, codePage, sharePage, providerPage, nextPricing, nextChatPricing] = await Promise.all([
       request<AdminOverview>("/v1/admin/overview", {}, credential),
-      request<AdminTodayUsage>("/v1/admin/usage/today", {}, credential),
+      request<AdminTodayUsage>("/v1/admin/usage?days=1", {}, credential),
       request<{ items: AdminUser[] }>(`/v1/admin/users${queryString}`, {}, credential),
       request<{ items: RedemptionCode[] }>("/v1/admin/redemption-codes?limit=200", {}, credential),
       request<{ items: ReviewShare[] }>("/v1/admin/inspiration-space?limit=200", {}, credential),
@@ -237,9 +248,10 @@ export function AdminConsole() {
     return page.items;
   };
 
-  const refreshTodayUsage = async () => {
-    const nextUsage = await request<AdminTodayUsage>("/v1/admin/usage/today");
+  const refreshUsage = async (days = usageDays) => {
+    const nextUsage = await request<AdminTodayUsage>(`/v1/admin/usage?days=${days}`);
     setTodayUsage(nextUsage);
+    setUsageDays(nextUsage.days);
     setUsageImageModel((current) => (
       current === "all" || nextUsage.totals.imageModels.some((model) => model.key === current)
         ? current
@@ -286,6 +298,7 @@ export function AdminConsole() {
     setMembershipCode("pro");
     setMembershipName("Pro");
     setMembershipDiscountDraft(emptyMembershipDiscounts());
+    setMembershipQuotaDrafts([]);
     setMembershipLegacyPrices({});
   };
 
@@ -306,6 +319,11 @@ export function AdminConsole() {
     setMembershipCode(plan.code);
     setMembershipName(plan.name);
     setMembershipDiscountDraft(next);
+    setMembershipQuotaDrafts(membershipQuotasFromFreeQuota(plan.versions[0]?.freeQuota).map((quota) => ({
+      canonicalModelId: quota.canonicalModelId,
+      period: quota.period,
+      limit: String(quota.limit),
+    })));
     setMembershipLegacyPrices(legacyPrices);
   };
 
@@ -325,13 +343,57 @@ export function AdminConsole() {
     return { ...membershipLegacyPrices, discounts };
   };
 
+  const addMembershipQuota = () => {
+    const model = membershipModels.find((item) => (
+      item.modality === "image" || item.modality === "chat"
+    ));
+    if (!model) {
+      setError("当前没有可配置额度的图片或 Chat canonical model");
+      return;
+    }
+    setMembershipQuotaDrafts((current) => [...current, {
+      canonicalModelId: model.id,
+      period: "DAILY",
+      limit: "",
+    }]);
+  };
+
+  const updateMembershipQuota = (index: number, patch: Partial<MembershipQuotaDraft>) => {
+    setMembershipQuotaDrafts((current) => current.map((quota, quotaIndex) => (
+      quotaIndex === index ? { ...quota, ...patch } : quota
+    )));
+  };
+
+  const buildMembershipFreeQuota = () => {
+    const seen = new Set<string>();
+    return {
+      quotas: membershipQuotaDrafts.map((draft) => {
+        const model = membershipModels.find((item) => item.id === draft.canonicalModelId);
+        const type = model ? membershipQuotaTypeForModality(model.modality) : null;
+        const limit = Number(draft.limit.trim());
+        if (!model || !type) throw new Error("请选择有效的图片或 Chat canonical model");
+        if (!/^\d+$/.test(draft.limit.trim()) || !Number.isSafeInteger(limit) || limit <= 0) {
+          throw new Error(`${model.displayName || model.canonicalModelKey} 的免费额度必须是正整数`);
+        }
+        const key = `${type}:${model.id}:${draft.period}`;
+        if (seen.has(key)) throw new Error(`${model.displayName || model.canonicalModelKey} 的同周期额度不能重复`);
+        seen.add(key);
+        return { type, canonicalModelId: model.id, period: draft.period, limit };
+      }),
+    };
+  };
+
   const createMembership = async (event: FormEvent) => {
     event.preventDefault();
     const matchingPlan = membershipPlans.find((plan) => plan.code.toLowerCase() === membershipCode.trim().toLowerCase());
     const targetPlanId = membershipEditingPlanId || matchingPlan?.id || null;
     const editing = Boolean(targetPlanId);
     let prices: Record<string, unknown>;
-    try { prices = buildMembershipPrices(); } catch (reason) { setError(reason instanceof Error ? reason.message : "会员价格填写无效"); return; }
+    let freeQuota: { quotas: Array<{ type: "IMAGE_COUNT" | "LLM_TOKENS"; canonicalModelId: string; period: AdminMembershipQuotaPeriod; limit: number }> };
+    try {
+      prices = buildMembershipPrices();
+      freeQuota = buildMembershipFreeQuota();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "会员配置填写无效"); return; }
     setBusy(true); clearMessage();
     try {
       const path = targetPlanId
@@ -343,6 +405,7 @@ export function AdminConsole() {
           ...(targetPlanId ? {} : { code: membershipCode }),
           name: membershipName,
           prices,
+          freeQuota,
         }),
       });
       await refreshMembership();
@@ -449,6 +512,7 @@ export function AdminConsole() {
     setAdminKey("");
     setOverview(null);
     setTodayUsage(null);
+    setUsageDays(1);
     setUsageImageModel("all");
     setUsers([]);
     setSelectedUser(null);
@@ -945,6 +1009,12 @@ export function AdminConsole() {
   const selectedImageTotals = todayUsage
     ? selectedImageUsage(todayUsage.totals)
     : { imageCount: "0", imageRequests: 0 };
+  const usagePeriodLabel = adminUsagePeriodLabel(usageDays);
+  const usageDateLabel = usageDays === 1
+    ? todayUsage?.date || usagePeriodLabel
+    : todayUsage?.startDate && todayUsage.endDate
+      ? `${todayUsage.startDate} 至 ${todayUsage.endDate}`
+      : usagePeriodLabel;
 
   if (!adminKey) {
     return (
@@ -995,11 +1065,26 @@ export function AdminConsole() {
         <section className={styles.usageDashboard}>
           <header className={styles.usageHeader}>
             <div>
-              <span>DAILY AI USAGE</span>
-              <h2>{todayUsage?.date || "今日"} 使用统计</h2>
-              <p>按中国标准时间（UTC+8）自然日统计成功请求。Token 总量 = 输入 + 输出 + 缓存写入，缓存命中已包含在输入中，不重复相加。</p>
+              <span>AI USAGE</span>
+              <h2>{usageDateLabel} 使用统计</h2>
+              <p>按中国标准时间（UTC+8）自然日统计成功请求，最长可查看最近 30 天。Token 总量 = 输入 + 输出 + 缓存写入，缓存命中已包含在输入中，不重复相加。</p>
             </div>
             <div className={styles.usageActions}>
+              <label className={styles.usagePeriodSelect}>
+                <span>统计范围</span>
+                <select value={usageDays} disabled={busy} onChange={(event) => {
+                  const days = Number(event.target.value);
+                  setBusy(true);
+                  clearMessage();
+                  void refreshUsage(days)
+                    .catch((reason) => setError(reason instanceof Error ? reason.message : "使用统计加载失败"))
+                    .finally(() => setBusy(false));
+                }}>
+                  <option value={1}>今日</option>
+                  <option value={7}>最近 7 天</option>
+                  <option value={30}>最近 30 天</option>
+                </select>
+              </label>
               <label>
                 <span>选择生图模型</span>
                 <select value={usageImageModel} onChange={(event) => setUsageImageModel(event.target.value)}>
@@ -1010,7 +1095,7 @@ export function AdminConsole() {
               <button className={styles.ghost} type="button" disabled={busy} onClick={() => {
                 setBusy(true);
                 clearMessage();
-                void refreshTodayUsage()
+                void refreshUsage()
                   .catch((reason) => setError(reason instanceof Error ? reason.message : "使用统计刷新失败"))
                   .finally(() => setBusy(false));
               }}>{busy ? "刷新中…" : "刷新统计"}</button>
@@ -1018,8 +1103,8 @@ export function AdminConsole() {
           </header>
 
           <div className={styles.usageMetrics}>
-            <article><span>今日活跃用户</span><strong>{todayUsage?.totals.activeUsers ?? 0}</strong><small>有成功图片或文字请求</small></article>
-            <article><span>今日生图</span><strong>{formatWholeNumber(selectedImageTotals.imageCount)}</strong><small>{usageModel?.displayName || "全部生图模型"} · {selectedImageTotals.imageRequests} 次请求</small></article>
+            <article><span>{usagePeriodLabel}活跃用户</span><strong>{todayUsage?.totals.activeUsers ?? 0}</strong><small>有成功图片或文字请求</small></article>
+            <article><span>{usagePeriodLabel}生图</span><strong>{formatWholeNumber(selectedImageTotals.imageCount)}</strong><small>{usageModel?.displayName || "全部生图模型"} · {selectedImageTotals.imageRequests} 次请求</small></article>
             <article><span>Token 总消耗</span><strong>{formatWholeNumber(todayUsage?.totals.totalTokens)}</strong><small>输入、输出与缓存写入合计</small></article>
             <article data-warning={Boolean(todayUsage?.totals.tokenRequestsWithoutUsage)}>
               <span>Token 数据覆盖</span>
@@ -1049,7 +1134,7 @@ export function AdminConsole() {
                 })}
               </tbody>
             </table>
-            {!todayUsage?.items.length && <p className={styles.empty}>今天还没有成功的图片或文字请求</p>}
+            {!todayUsage?.items.length && <p className={styles.empty}>{usagePeriodLabel}还没有成功的图片或文字请求</p>}
           </div>
           <p className={styles.usageFootnote}>统计生成于 {formatDateTime(todayUsage?.generatedAt)} · 时区 {todayUsage?.timeZone || "Asia/Shanghai"} · “未上报”表示上游成功响应未包含 Token usage，不会按 0 计入。</p>
         </section>
@@ -1177,6 +1262,41 @@ export function AdminConsole() {
                 <div className={styles.membershipModelHint}>
                   GPT Image 1K 当前覆盖：{membershipModels.filter(gptImageModel).map((model) => model.displayName || model.canonicalModelKey).join("、") || "暂无已发布的 GPT Image 1K 模型"}
                 </div>
+              </div>
+              <div className={styles.membershipQuotaEditor}>
+                <div className={styles.membershipQuotaHeader}>
+                  <span><strong>会员免费额度</strong><small>按 canonical model 配置，使用量与重置时间由服务端计算</small></span>
+                  <button type="button" className={styles.ghost} onClick={addMembershipQuota}>添加额度</button>
+                </div>
+                {membershipQuotaDrafts.map((quota, index) => {
+                  const selectedModel = membershipModels.find((model) => model.id === quota.canonicalModelId);
+                  const quotaType = selectedModel ? membershipQuotaTypeForModality(selectedModel.modality) : null;
+                  return (
+                    <div className={styles.membershipQuotaRow} key={`${quota.canonicalModelId}-${index}`}>
+                      <label>
+                        <strong>Canonical Model</strong>
+                        <select value={quota.canonicalModelId} onChange={(event) => updateMembershipQuota(index, { canonicalModelId: event.target.value })}>
+                          {membershipModels.filter((model) => model.modality === "image" || model.modality === "chat").map((model) => (
+                            <option key={model.id} value={model.id}>{model.displayName || model.canonicalModelKey} · {model.modality === "image" ? "图片张数" : "Token"}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <strong>周期</strong>
+                        <select value={quota.period} onChange={(event) => updateMembershipQuota(index, { period: event.target.value as AdminMembershipQuotaPeriod })}>
+                          <option value="DAILY">每日</option>
+                          <option value="MONTHLY">每月</option>
+                        </select>
+                      </label>
+                      <label>
+                        <strong>{quotaType === "LLM_TOKENS" ? "Token 上限" : "图片张数上限"}</strong>
+                        <input type="number" min={1} step={1} inputMode="numeric" value={quota.limit} onChange={(event) => updateMembershipQuota(index, { limit: event.target.value })} placeholder={quotaType === "LLM_TOKENS" ? "例如 1000000" : "例如 20"} />
+                      </label>
+                      <button type="button" className={styles.ghost} aria-label="移除此额度" onClick={() => setMembershipQuotaDrafts((current) => current.filter((_, quotaIndex) => quotaIndex !== index))}>移除</button>
+                    </div>
+                  );
+                })}
+                {!membershipQuotaDrafts.length && <p className={styles.membershipQuotaEmpty}>未配置免费额度，会员仍按上方折扣计费。</p>}
               </div>
               <button disabled={busy}>{membershipEditingPlanId ? "保存会员计划" : "创建会员计划"}</button>
             </form>

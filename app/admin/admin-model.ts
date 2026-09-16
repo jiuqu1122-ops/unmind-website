@@ -294,6 +294,9 @@ export type AdminTodayUsageImageModel = {
 
 export type AdminTodayUsage = {
   date: string;
+  days: number;
+  startDate: string;
+  endDate: string;
   timeZone: string;
   range: { start: string; end: string };
   generatedAt: string;
@@ -304,6 +307,59 @@ export type AdminTodayUsage = {
     displayName: string | null;
     status: string;
   }>;
+};
+
+export type AdminMembershipQuotaType = "IMAGE_COUNT" | "LLM_TOKENS";
+export type AdminMembershipQuotaPeriod = "DAILY" | "MONTHLY";
+
+export type AdminMembershipQuota = {
+  type: AdminMembershipQuotaType;
+  canonicalModelId: string;
+  period: AdminMembershipQuotaPeriod;
+  limit: number;
+};
+
+export const membershipQuotaTypeForModality = (modality: string): AdminMembershipQuotaType | null => {
+  if (modality === "image") return "IMAGE_COUNT";
+  if (modality === "chat") return "LLM_TOKENS";
+  return null;
+};
+
+export const membershipQuotasFromFreeQuota = (value: unknown): AdminMembershipQuota[] => {
+  const root = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+  const candidates = Array.isArray(value)
+    ? value
+    : Array.isArray(root?.quotas)
+      ? root.quotas
+      : [];
+  const seen = new Set<string>();
+  return candidates.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return [];
+    const quota = candidate as Record<string, unknown>;
+    const type = quota.type;
+    const canonicalModelId = typeof quota.canonicalModelId === "string"
+      ? quota.canonicalModelId.trim()
+      : "";
+    const period = quota.period;
+    const limit = typeof quota.limit === "string" ? Number(quota.limit.trim()) : quota.limit;
+    if ((type !== "IMAGE_COUNT" && type !== "LLM_TOKENS")
+      || (period !== "DAILY" && period !== "MONTHLY")
+      || !canonicalModelId
+      || typeof limit !== "number"
+      || !Number.isSafeInteger(limit)
+      || limit <= 0) return [];
+    const key = `${type}:${canonicalModelId}:${period}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ type, canonicalModelId, period, limit }];
+  });
+};
+
+export const adminUsagePeriodLabel = (days: number) => {
+  if (days === 1) return "今日";
+  return `最近 ${days} 天`;
 };
 
 export const newProviderDraft = (kind: AdminProviderKind = "NEW_API"): ProviderDraft => ({

@@ -79,11 +79,12 @@ test("fast Banana pricing has independent 2K and 4K rows", () => {
   assert.equal(pricingLabel("nano-banana-2-fast"), "Nano Banana 2（稳定高速）");
 });
 
-test("admin console exposes daily per-user image and token usage", async () => {
+test("admin console exposes ranged per-user image and token usage", async () => {
   const source = await readFile(new URL("../app/admin/admin-console.tsx", import.meta.url), "utf8");
-  assert.match(source, /\/v1\/admin\/usage\/today/);
+  assert.match(source, /\/v1\/admin\/usage\?days=/);
   assert.match(source, />使用统计</);
-  assert.match(source, />今日生图</);
+  assert.match(source, /最近 30 天/);
+  assert.match(source, /\{usagePeriodLabel\}生图/);
   assert.match(source, />Token 总消耗</);
   assert.match(source, /选择生图模型/);
   assert.match(source, /totals\.imageModels\.map/);
