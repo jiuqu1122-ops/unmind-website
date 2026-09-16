@@ -114,6 +114,9 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /body: JSON\.stringify\(draft\)/);
   assert.doesNotMatch(source, /canonicalModelKey: target, expectedUpdatedAt: discovery\.updatedAt/);
   assert.doesNotMatch(source, /\.\.\.draft, expectedUpdatedAt: discovery\.updatedAt/);
+  assert.match(source, /该上游模型名与手动维护的兼容名称冲突/);
+  assert.match(source, /该上游模型已被映射或不再处于待映射状态/);
+  assert.doesNotMatch(source, /配置已被其他操作修改，请刷新后重试/);
   assert.doesNotMatch(source, /<textarea/);
   assert.doesNotMatch(source, /<input[^>]+upstreamModelId/);
 });

@@ -145,6 +145,22 @@ const reasonMessage = (reason: unknown, fallback: string) => (
   reason instanceof Error ? reason.message : fallback
 );
 
+const operationErrorMessage = (reason: unknown, fallback: string) => {
+  const message = reasonMessage(reason, fallback);
+  const status = reason && typeof reason === "object" ? (reason as { status?: number }).status : undefined;
+  if (status !== 409) return message;
+  if (message === "A manually managed alias conflicts with this route mapping") {
+    return "该上游模型名与手动维护的兼容名称冲突，请先处理该兼容名称后再映射。";
+  }
+  if (message === "The route alias belongs to a different model") {
+    return "该渠道的兼容名称已属于其他模型，请刷新并检查模型映射。";
+  }
+  if (message === "Upstream mapping was modified by another administrator") {
+    return "该上游模型已被映射或不再处于待映射状态，请刷新后确认当前映射。";
+  }
+  return message;
+};
+
 const jsonObjectOrNull = (value: unknown) => (
   value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null
 );
@@ -820,8 +836,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
       await refreshCenter(preferredKey);
       return true;
     } catch (reason) {
-      const status = reason && typeof reason === "object" ? (reason as { status?: number }).status : undefined;
-      onError(status === 409 ? "配置已被其他操作修改，请刷新后重试。" : reasonMessage(reason, "操作失败"));
+      onError(operationErrorMessage(reason, "操作失败"));
       return false;
     } finally {
       setBusy(false);
@@ -947,8 +962,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
       onNotice("未保存修改已保存");
       return true;
     } catch (reason) {
-      const status = reason && typeof reason === "object" ? (reason as { status?: number }).status : undefined;
-      onError(status === 409 ? "配置已被其他操作修改，请刷新后重试。" : reasonMessage(reason, "保存失败"));
+      onError(operationErrorMessage(reason, "保存失败"));
       return false;
     } finally {
       setBusy(false);
