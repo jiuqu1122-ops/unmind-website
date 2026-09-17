@@ -9,6 +9,7 @@ export type ImageAdapterKey =
   | "LEGACY"
   | "GPT_IMAGE"
   | "NANO_BANANA"
+  | "GEMINI_NATIVE_IMAGE"
   | "SEEDREAM_IMAGES_API"
   | "GROK_IMAGES_API"
   | "GENERIC_OPENAI_IMAGE";

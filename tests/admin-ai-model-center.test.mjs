@@ -97,6 +97,7 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /capabilitiesOverride,/);
   assert.match(source, /图片调用适配器/);
   assert.match(source, /兼容旧逻辑 \/ Legacy/);
+  assert.match(source, /Gemini Native \/ Nano Banana/);
   assert.match(source, /Seedream Images API/);
   assert.match(source, /Grok Images API/);
   assert.match(source, /Resolution 参数/);

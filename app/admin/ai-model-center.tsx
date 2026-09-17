@@ -234,6 +234,7 @@ const imageAdapterOptions: Array<{ value: ImageAdapterKey | ""; label: string }>
   { value: "", label: "兼容旧逻辑 / Legacy" },
   { value: "GPT_IMAGE", label: "GPT Image" },
   { value: "NANO_BANANA", label: "Nano Banana" },
+  { value: "GEMINI_NATIVE_IMAGE", label: "Gemini Native / Nano Banana" },
   { value: "SEEDREAM_IMAGES_API", label: "Seedream Images API" },
   { value: "GROK_IMAGES_API", label: "Grok Images API" },
   { value: "GENERIC_OPENAI_IMAGE", label: "Generic OpenAI Images" },
