@@ -15,6 +15,8 @@ import {
   marginPercent,
   modalityLabel,
   modelMatchesModality,
+  normalizeCapabilityOption,
+  normalizeCapabilityOptions,
   priceDiffRows,
   priceSummary,
   type AdminAiModelDetail,
@@ -24,7 +26,7 @@ import {
   type AiModelModality,
   type AiModelRoute,
   type AiUpstreamDiscovery,
-  type ImageAdapterKey,
+  type CapabilityOptionKind,
   type JsonObject,
 } from "./ai-model-center-model";
 import styles from "./admin.module.css";
@@ -47,7 +49,7 @@ type RouteDraft = {
   priority: string;
   costProfile: JsonObject;
   capabilitiesOverride: JsonObject | null;
-  adapterKey: ImageAdapterKey | "";
+  adapterKey: string;
   adapterConfig: JsonObject | null;
 };
 
@@ -105,7 +107,6 @@ type Props = {
   providers: AdminProvider[];
   onError: (message: string) => void;
   onNotice: (message: string) => void;
-  onUseLegacy: () => void;
 };
 
 const emptyBasic: BasicDraft = {
@@ -230,7 +231,7 @@ const priceDraftFor = (detail: AdminAiModelDetail) => {
   return next;
 };
 
-const imageAdapterOptions: Array<{ value: ImageAdapterKey | ""; label: string }> = [
+const imageAdapterOptions: Array<{ value: string; label: string }> = [
   { value: "", label: "兼容旧逻辑 / Legacy" },
   { value: "GPT_IMAGE", label: "GPT Image" },
   { value: "NANO_BANANA", label: "Nano Banana" },
@@ -241,7 +242,7 @@ const imageAdapterOptions: Array<{ value: ImageAdapterKey | ""; label: string }>
 ];
 
 const imageAdapterConfigFor = (
-  adapterKey: ImageAdapterKey | "",
+  adapterKey: string,
   current: JsonObject | null,
 ): JsonObject | null => {
   if (adapterKey === "SEEDREAM_IMAGES_API") return {
@@ -352,12 +353,33 @@ const normalizedPrice = (detail: AdminAiModelDetail, capabilities: JsonObject, p
   }
   if (detail.billingType === "video_duration") {
     const durations = objectValue(cleaned.creditsByDuration);
+    const supported = numberArray(capabilities.supportedDurations).map(String);
     if (!Object.keys(durations).length && !textValue(cleaned.creditsPerSecond)) {
       throw new Error("请至少填写一项时长价格或每秒价格");
     }
+    if (!textValue(cleaned.creditsPerSecond)) {
+      const missing = supported.filter((duration) => !textValue(durations[duration]));
+      if (missing.length) throw new Error(`${missing.join("、")} 秒尚未配置价格`);
+    }
+    if (supported.length) {
+      cleaned.creditsByDuration = Object.fromEntries(supported.flatMap((duration) => (
+        textValue(durations[duration]) ? [[duration, durations[duration]]] : []
+      )));
+    }
   }
-  if (detail.billingType === "video_resolution_duration" && !Object.keys(objectValue(cleaned.creditsByResolution)).length) {
-    throw new Error("请至少填写一项分辨率价格");
+  if (detail.billingType === "video_resolution_duration") {
+    const prices = objectValue(cleaned.creditsByResolution);
+    const supported = normalizeCapabilityOptions(stringArray(capabilities.supportedResolutions), "resolution");
+    if (!supported.length) throw new Error("请先配置模型支持的分辨率");
+    const missing = supported.filter((resolution) => !textValue(prices[resolution]));
+    if (missing.length) throw new Error(`${missing.map((item) => item.toUpperCase()).join("、")} 尚未配置价格`);
+    cleaned.creditsByResolution = Object.fromEntries(supported.map((resolution) => [resolution, prices[resolution]]));
+    const referencePrices = objectValue(cleaned.referenceVideoCreditsByResolution);
+    if (Object.keys(referencePrices).length) {
+      cleaned.referenceVideoCreditsByResolution = Object.fromEntries(supported.flatMap((resolution) => (
+        textValue(referencePrices[resolution]) ? [[resolution, referencePrices[resolution]]] : []
+      )));
+    }
   }
   return cleaned;
 };
@@ -375,12 +397,15 @@ const defaultCapabilities = (modality: AiModelModality): JsonObject => modality 
   supportedResolutions: ["720p", "1080p"],
   supportedDurations: [5, 10],
   supportedAspectRatios: ["1:1", "16:9", "9:16"],
+  supportsTextPrompt: true,
   maxReferenceImages: 9,
   maxReferenceVideos: 3,
   maxReferenceAudios: 3,
   supportsReferenceImage: true,
-  supportsVideoReference: true,
-  supportsAudioReference: true,
+  supportsReferenceVideo: true,
+  supportsReferenceAudio: true,
+  supportsFirstFrame: true,
+  supportsLastFrame: true,
   supportsFirstLastFrame: false,
   supportedInputModes: ["TEXT", "IMAGE", "REF"],
   maxOutputs: 4,
@@ -435,6 +460,76 @@ function ToggleChoices({
   );
 }
 
+function EditableCapabilityChoices({
+  label,
+  presets,
+  selected,
+  kind,
+  onChange,
+}: {
+  label: string;
+  presets: string[];
+  selected: string[];
+  kind: CapabilityOptionKind;
+  onChange: (next: string[]) => void;
+}) {
+  const [custom, setCustom] = useState("");
+  const [validation, setValidation] = useState("");
+  const normalized = normalizeCapabilityOptions(selected.map(String), kind);
+  const presetValues = presets.map((value) => normalizeCapabilityOption(value, kind));
+  const addCustom = () => {
+    try {
+      const next = normalizeCapabilityOption(custom, kind);
+      onChange(Array.from(new Set([...normalized, next])));
+      setCustom("");
+      setValidation("");
+    } catch (reason) {
+      setValidation(reasonMessage(reason, "自定义规格无效"));
+    }
+  };
+  return (
+    <fieldset className={`${styles.choiceField} ${styles.editableChoiceField}`}>
+      <legend>{label}</legend>
+      <div className={styles.choicePresets}>
+        {presetValues.map((value, index) => (
+          <label key={value}>
+            <input
+              type="checkbox"
+              checked={normalized.includes(value)}
+              onChange={(event) => onChange(event.target.checked
+                ? Array.from(new Set([...normalized, value]))
+                : normalized.filter((item) => item !== value))}
+            />
+            <span>{kind === "duration" ? `${value} 秒` : presets[index]}</span>
+          </label>
+        ))}
+      </div>
+      <div className={styles.choiceChips}>
+        {normalized.map((value) => (
+          <button key={value} type="button" onClick={() => onChange(normalized.filter((item) => item !== value))}>
+            {kind === "duration" ? `${value} 秒` : value.toUpperCase()} <span aria-hidden="true">×</span>
+          </button>
+        ))}
+      </div>
+      <div className={styles.customChoiceInput}>
+        <input
+          value={custom}
+          onChange={(event) => setCustom(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              addCustom();
+            }
+          }}
+          placeholder={kind === "resolution" ? "例如 864p 或 1280x768" : kind === "duration" ? "例如 20" : "例如 21:9"}
+        />
+        <button type="button" onClick={addCustom}>+ 添加规格</button>
+      </div>
+      {validation && <small className={styles.choiceValidation}>{validation}</small>}
+    </fieldset>
+  );
+}
+
 function SwitchField({ label, hint, checked, onChange }: {
   label: string;
   hint: string;
@@ -481,14 +576,17 @@ function CapabilitiesEditor({ modality, value, onChange, compact = false }: {
       </div>
     );
   }
-  const resolutions = modality === "image"
-    ? [{ value: "1k", label: "1K" }, { value: "2k", label: "2K" }, { value: "4k", label: "4K" }]
-    : [{ value: "480p", label: "480p" }, { value: "720p", label: "720p" }, { value: "1080p", label: "1080p" }, { value: "2k", label: "2K" }];
+  const imageResolutions = [{ value: "1k", label: "1K" }, { value: "2k", label: "2K" }, { value: "4k", label: "4K" }];
   return (
     <div className={styles.structuredForm} data-compact={compact}>
-      <ToggleChoices label="支持分辨率" values={resolutions} selected={stringArray(value.supportedResolutions)} onChange={(next) => update("supportedResolutions", next)} />
-      {modality === "video" && <ToggleChoices label="支持时长" values={[5, 10, 15].map((item) => ({ value: String(item), label: `${item} 秒` }))} selected={numberArray(value.supportedDurations).map(String)} onChange={(next) => update("supportedDurations", next.map(Number))} />}
-      <ToggleChoices label="支持比例" values={["1:1", "3:4", "4:3", "9:16", "16:9"].map((item) => ({ value: item, label: item }))} selected={stringArray(value.supportedAspectRatios)} onChange={(next) => update("supportedAspectRatios", next)} />
+      {modality === "image" ? <>
+        <ToggleChoices label="支持分辨率" values={imageResolutions} selected={stringArray(value.supportedResolutions)} onChange={(next) => update("supportedResolutions", next)} />
+        <ToggleChoices label="支持比例" values={["1:1", "3:4", "4:3", "9:16", "16:9"].map((item) => ({ value: item, label: item }))} selected={stringArray(value.supportedAspectRatios)} onChange={(next) => update("supportedAspectRatios", next)} />
+      </> : <>
+        <EditableCapabilityChoices label="支持分辨率" presets={["480p", "540p", "576p", "720p", "768p", "1080p", "1440p", "2k", "4k"]} selected={stringArray(value.supportedResolutions)} kind="resolution" onChange={(next) => update("supportedResolutions", next)} />
+        <EditableCapabilityChoices label="支持时长" presets={["3", "4", "5", "6", "8", "10", "12", "15"]} selected={numberArray(value.supportedDurations).map(String)} kind="duration" onChange={(next) => update("supportedDurations", next.map(Number))} />
+        <EditableCapabilityChoices label="支持比例" presets={["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"]} selected={stringArray(value.supportedAspectRatios)} kind="aspectRatio" onChange={(next) => update("supportedAspectRatios", next)} />
+      </>}
       <div className={styles.formGrid}>
         <label><strong>最少参考图</strong><input type="number" min={0} value={textValue(value.minReferenceImages ?? 0)} onChange={(event) => update("minReferenceImages", Number(event.target.value))} /></label>
         <label><strong>最大参考图</strong><input type="number" min={0} value={textValue(value.maxReferenceImages ?? 0)} onChange={(event) => update("maxReferenceImages", Number(event.target.value))} /></label>
@@ -499,8 +597,11 @@ function CapabilitiesEditor({ modality, value, onChange, compact = false }: {
       <div className={styles.switchGrid}>
         <SwitchField label="支持参考图" hint="允许上传图片作为输入" checked={Boolean(value.supportsReferenceImage)} onChange={(next) => update("supportsReferenceImage", next)} />
         {modality === "image" && <SwitchField label="透明背景" hint="允许输出透明 PNG" checked={Boolean(value.supportsTransparentBackground)} onChange={(next) => update("supportsTransparentBackground", next)} />}
-        {modality === "video" && <SwitchField label="支持参考视频" hint="允许视频参考输入" checked={Boolean(value.supportsVideoReference)} onChange={(next) => update("supportsVideoReference", next)} />}
-        {modality === "video" && <SwitchField label="支持参考音频" hint="允许音频参考输入" checked={Boolean(value.supportsAudioReference)} onChange={(next) => update("supportsAudioReference", next)} />}
+        {modality === "video" && <SwitchField label="支持文字提示" hint="允许 text-to-video" checked={value.supportsTextPrompt !== false} onChange={(next) => update("supportsTextPrompt", next)} />}
+        {modality === "video" && <SwitchField label="支持参考视频" hint="允许视频参考输入" checked={Boolean(value.supportsReferenceVideo ?? value.supportsVideoReference)} onChange={(next) => update("supportsReferenceVideo", next)} />}
+        {modality === "video" && <SwitchField label="支持参考音频" hint="允许音频参考输入" checked={Boolean(value.supportsReferenceAudio ?? value.supportsAudioReference)} onChange={(next) => update("supportsReferenceAudio", next)} />}
+        {modality === "video" && <SwitchField label="支持首帧" hint="允许单独提供首帧" checked={Boolean(value.supportsFirstFrame)} onChange={(next) => update("supportsFirstFrame", next)} />}
+        {modality === "video" && <SwitchField label="支持尾帧" hint="允许单独提供尾帧" checked={Boolean(value.supportsLastFrame)} onChange={(next) => update("supportsLastFrame", next)} />}
         {modality === "video" && <SwitchField label="支持首尾帧" hint="允许首帧与尾帧控制" checked={Boolean(value.supportsFirstLastFrame)} onChange={(next) => update("supportsFirstLastFrame", next)} />}
       </div>
       {modality === "image" ? (
@@ -579,16 +680,22 @@ function PricingEditor({ detail, capabilities, value, onChange }: {
   const resolutionPrices = objectValue(value.creditsByResolution);
   const durationPrices = objectValue(value.creditsByDuration);
   const referenceVideoPrices = objectValue(value.referenceVideoCreditsByResolution);
-  const videoResolutions = Array.from(new Set([
-    ...stringArray(capabilities.supportedResolutions).map((item) => item.toLowerCase()),
-    ...Object.keys(resolutionPrices),
-  ]));
-  const durations = Array.from(new Set([
-    ...numberArray(capabilities.supportedDurations).map(String),
-    ...Object.keys(durationPrices),
-  ]));
-  const effectiveVideoResolutions = videoResolutions.length ? videoResolutions : ["480p", "720p", "1080p"];
-  const effectiveDurations = durations.length ? durations : ["5", "10", "15"];
+  const capabilityResolutions = normalizeCapabilityOptions(
+    stringArray(capabilities.supportedResolutions),
+    "resolution",
+  );
+  const capabilityDurations = normalizeCapabilityOptions(
+    numberArray(capabilities.supportedDurations).map(String),
+    "duration",
+  );
+  // Pricing never grants a capability. Existing price keys are used only for
+  // pre-capability legacy records; once server capabilities exist, they win.
+  const effectiveVideoResolutions = capabilityResolutions.length
+    ? capabilityResolutions
+    : Object.keys(resolutionPrices).map((item) => item.toLowerCase());
+  const effectiveDurations = capabilityDurations.length
+    ? capabilityDurations
+    : Object.keys(durationPrices);
   return (
     <div className={styles.priceForm}>
       <div className={styles.priceFieldGrid}>
@@ -599,7 +706,7 @@ function PricingEditor({ detail, capabilities, value, onChange }: {
       </div>
       {(detail.billingType === "video_resolution_duration" || Object.keys(resolutionPrices).length > 0) && <section><header><strong>分辨率价格</strong><span>按服务端支持规格显示</span></header><div className={styles.priceFieldGrid}>{effectiveVideoResolutions.map((item) => <NumericInput key={item} label={item.toUpperCase()} unit="积分 / 秒" value={resolutionPrices[item]} onChange={(next) => set(["creditsByResolution", item], next)} />)}</div></section>}
       {(detail.billingType === "video_duration" || detail.billingType === "video_resolution_duration" || Object.keys(durationPrices).length > 0) && <section><header><strong>时长价格</strong><span>按完整视频计价</span></header><div className={styles.priceFieldGrid}>{effectiveDurations.map((item) => <NumericInput key={item} label={`${item} 秒`} unit="积分" value={durationPrices[item]} onChange={(next) => set(["creditsByDuration", item], next)} />)}</div></section>}
-      {Object.keys(referenceVideoPrices).length > 0 && <section><header><strong>参考视频分辨率价格</strong><span>可选附加价格</span></header><div className={styles.priceFieldGrid}>{Array.from(new Set([...effectiveVideoResolutions, ...Object.keys(referenceVideoPrices)])).map((item) => <NumericInput key={item} label={item.toUpperCase()} unit="积分 / 秒" value={referenceVideoPrices[item]} onChange={(next) => set(["referenceVideoCreditsByResolution", item], next)} />)}</div></section>}
+      {Object.keys(referenceVideoPrices).length > 0 && <section><header><strong>参考视频分辨率价格</strong><span>可选附加价格</span></header><div className={styles.priceFieldGrid}>{effectiveVideoResolutions.map((item) => <NumericInput key={item} label={item.toUpperCase()} unit="积分 / 秒" value={referenceVideoPrices[item]} onChange={(next) => set(["referenceVideoCreditsByResolution", item], next)} />)}</div></section>}
     </div>
   );
 }
@@ -651,7 +758,7 @@ function ImageAdapterEditor({ value, onChange }: {
           aria-label="图片调用适配器"
           value={value.adapterKey}
           onChange={(event) => {
-            const adapterKey = event.target.value as ImageAdapterKey | "";
+            const adapterKey = event.target.value;
             onChange({
               ...value,
               adapterKey,
@@ -678,7 +785,52 @@ function ImageAdapterEditor({ value, onChange }: {
   );
 }
 
-export function AiModelCenter({ request, providers, onError, onNotice, onUseLegacy }: Props) {
+const videoAdapterOptions = [
+  ["", "兼容旧逻辑 / Legacy"],
+  ["LEGACY_VIDEO", "Legacy Video"],
+  ["MINIMAX_NATIVE_VIDEO", "MiniMax Native Video"],
+  ["SEEDANCE_VIDEO", "Seedance Video"],
+  ["VEO_VIDEO", "Veo Video"],
+  ["KLING_VIDEO", "Kling Video"],
+  ["GENERIC_ASYNC_VIDEO", "Generic Async Video"],
+  ["OPENAI_COMPATIBLE_VIDEO", "OpenAI Compatible Video"],
+] as const;
+
+function VideoAdapterEditor({ value, onChange }: {
+  value: RouteDraft;
+  onChange: (next: RouteDraft) => void;
+}) {
+  const config = objectValue(value.adapterConfig);
+  const setConfig = (key: string, next: string) => onChange({
+    ...value,
+    adapterConfig: { ...config, [key]: next },
+  });
+  return (
+    <div className={styles.structuredForm}>
+      <label>
+        <strong>视频调用适配器</strong>
+        <select
+          aria-label="视频调用适配器"
+          value={value.adapterKey}
+          onChange={(event) => onChange({
+            ...value,
+            adapterKey: event.target.value,
+            adapterConfig: event.target.value ? config : null,
+          })}
+        >
+          {videoAdapterOptions.map(([key, label]) => <option key={key || "legacy"} value={key}>{label}</option>)}
+        </select>
+        <small>适配器必须由 Route 显式指定；不会根据模型名称自动绑定。</small>
+      </label>
+      {value.adapterKey && <div className={styles.formGrid}>
+        <label><strong>Generation Endpoint</strong><input value={String(config.generationEndpoint ?? "")} onChange={(event) => setConfig("generationEndpoint", event.target.value)} placeholder="例如 /v1/video/generations" /></label>
+        <label><strong>Status Endpoint</strong><input value={String(config.statusEndpoint ?? "")} onChange={(event) => setConfig("statusEndpoint", event.target.value)} placeholder="例如 /v1/video/tasks/{id}" /></label>
+      </div>}
+    </div>
+  );
+}
+
+export function AiModelCenter({ request, providers, onError, onNotice }: Props) {
   const [supported, setSupported] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -694,6 +846,10 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
   const [usageDrafts, setUsageDrafts] = useState<Record<AiUsageModelKey, string>>({
     IMAGE_ANALYSIS: "",
     CANVAS_TEXT: "",
+  });
+  const [usageFixedCreditDrafts, setUsageFixedCreditDrafts] = useState<Record<AiUsageModelKey, string>>({
+    IMAGE_ANALYSIS: "1",
+    CANVAS_TEXT: "1",
   });
   const [selectedKey, setSelectedKey] = useState("");
   const [detail, setDetail] = useState<AdminAiModelDetail | null>(null);
@@ -788,6 +944,10 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
       setUsageDrafts({
         IMAGE_ANALYSIS: usagePage.items.find((item) => item.key === "IMAGE_ANALYSIS")?.canonicalModelId ?? "",
         CANVAS_TEXT: usagePage.items.find((item) => item.key === "CANVAS_TEXT")?.canonicalModelId ?? "",
+      });
+      setUsageFixedCreditDrafts({
+        IMAGE_ANALYSIS: usagePage.items.find((item) => item.key === "IMAGE_ANALYSIS")?.fixedCredits ?? "1",
+        CANVAS_TEXT: usagePage.items.find((item) => item.key === "CANVAS_TEXT")?.fixedCredits ?? "1",
       });
       setCreateDrafts((current) => Object.fromEntries(unmappedPage.items.map((item) => [item.id, current[item.id] ?? createDraftFor(item)])));
       setMappingTargets((current) => Object.fromEntries(unmappedPage.items.map((item) => {
@@ -918,9 +1078,9 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
     const adapterConfig = draft.adapterConfig === null
       ? null
       : withoutBlankValues(draft.adapterConfig) as JsonObject;
-    const adapterChanged = detail?.modality === "image"
+    const adapterChanged = detail?.modality !== "chat"
       && adapterKey !== (route.adapterKey ?? null);
-    const adapterConfigChanged = detail?.modality === "image"
+    const adapterConfigChanged = detail?.modality !== "chat"
       && JSON.stringify(adapterConfig) !== JSON.stringify(route.adapterConfig ?? null);
     try {
       validateNumericTree(costProfile);
@@ -1094,13 +1254,18 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
 
   const saveUsageBinding = async (key: AiUsageModelKey) => {
     const canonicalModelId = usageDrafts[key];
+    const fixedCredits = usageFixedCreditDrafts[key].trim();
     if (!canonicalModelId) {
       onError("请选择可用的 Chat 模型");
       return;
     }
+    if (!/^(?:0|[1-9]\d{0,11})(?:\.\d{1,6})?$/.test(fixedCredits)) {
+      onError("固定收费必须是非负数，最多保留 6 位小数");
+      return;
+    }
     await perform(() => request(`/v1/admin/ai-models/usage-model-bindings/${key}`, {
       method: "PATCH",
-      body: JSON.stringify({ canonicalModelId }),
+      body: JSON.stringify({ canonicalModelId, fixedCredits }),
     }), key === "IMAGE_ANALYSIS" ? "图片分析任务模型已保存" : "文字节点任务模型已保存");
   };
 
@@ -1196,8 +1361,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
     <section className={`${styles.panel} ${styles.modelCenterUnavailable}`}>
       <span>AI MODEL CENTER</span>
       <h2>模型中心尚未启用</h2>
-      <p>现有定价和渠道管理仍可正常使用。后端完成兼容迁移后，这里会自动启用。</p>
-      <button type="button" onClick={onUseLegacy}>继续使用旧版定价</button>
+      <p>当前服务端尚未提供 AI Model Center，请先完成服务端迁移后再管理模型与价格。</p>
     </section>
   );
 
@@ -1248,7 +1412,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
               return <section className={styles.editorCard} key={key}>
                 <header><div><span>{key === "IMAGE_ANALYSIS" ? "01" : "02"}</span><h4>{key === "IMAGE_ANALYSIS" ? "图片分析" : "文字节点 / 提示词优化"}</h4></div><button type="button" disabled={busy || !usageDrafts[key]} onClick={() => void saveUsageBinding(key)}>{busy ? "正在保存…" : "保存"}</button></header>
                 <p>{key === "IMAGE_ANALYSIS" ? "仅列出具备 operational Vision route 的 Chat 模型。" : "canvas_text_agent 与 prompt_optimization 共用此模型；普通 Chat 不受影响。"}</p>
-                <div className={styles.formGrid}><label><strong>当前 canonical 模型</strong><select aria-label={key === "IMAGE_ANALYSIS" ? "图片分析任务模型" : "文字节点任务模型"} value={usageDrafts[key]} onChange={(event) => setUsageDrafts((current) => ({ ...current, [key]: event.target.value }))}><option value="">请选择模型</option>{usageDrafts[key] && !selectedStillAvailable && <option value={usageDrafts[key]}>{binding?.displayName ?? binding?.canonicalModelKey ?? "当前模型"}（当前不可用）</option>}{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.displayName} · {candidate.canonicalModelKey}</option>)}</select></label><label><strong>当前路由</strong><input value={currentRouteLabel} disabled /></label></div>
+                <div className={styles.formGrid}><label><strong>当前 canonical 模型</strong><select aria-label={key === "IMAGE_ANALYSIS" ? "图片分析任务模型" : "文字节点任务模型"} value={usageDrafts[key]} onChange={(event) => setUsageDrafts((current) => ({ ...current, [key]: event.target.value }))}><option value="">请选择模型</option>{usageDrafts[key] && !selectedStillAvailable && <option value={usageDrafts[key]}>{binding?.displayName ?? binding?.canonicalModelKey ?? "当前模型"}（当前不可用）</option>}{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.displayName} · {candidate.canonicalModelKey}</option>)}</select></label><label><strong>固定收费</strong><input aria-label={`${key} 固定收费`} inputMode="decimal" value={usageFixedCreditDrafts[key]} onChange={(event) => setUsageFixedCreditDrafts((current) => ({ ...current, [key]: event.target.value }))} /><small>积分 / 次</small></label><label><strong>当前路由</strong><input value={currentRouteLabel} disabled /></label></div>
                 {!binding?.operational && <div className={styles.inlineWarning}>无可用调用路由。服务端会返回 USAGE_MODEL_NOT_AVAILABLE，不会静默切换模型。</div>}
               </section>;
             })}
@@ -1337,6 +1501,7 @@ export function AiModelCenter({ request, providers, onError, onNotice, onUseLega
                       <label><strong>优先级</strong><input type="number" min={0} value={routeDraft.priority} onChange={(event) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, priority: event.target.value } }))} /></label>
                       <CostEditor modality={detail.modality} value={routeDraft.costProfile} onChange={(costProfile) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, costProfile } }))} />
                       {detail.modality === "image" && <ImageAdapterEditor value={routeDraft} onChange={(next) => setRouteDrafts((current) => ({ ...current, [route.id]: next }))} />}
+                      {detail.modality === "video" && <VideoAdapterEditor value={routeDraft} onChange={(next) => setRouteDrafts((current) => ({ ...current, [route.id]: next }))} />}
                       <label className={styles.inlineCheck}>
                         <input
                           type="checkbox"

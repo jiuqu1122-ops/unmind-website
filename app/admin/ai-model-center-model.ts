@@ -5,15 +5,6 @@ export type AiModelStatus = "DRAFT" | "PUBLISHED" | "RETIRED";
 export type AiRoutingMode = "LEGACY" | "MANAGED";
 export type AiPricingMode = "MANUAL" | "MARKUP";
 export type AiUsageModelKey = "IMAGE_ANALYSIS" | "CANVAS_TEXT";
-export type ImageAdapterKey =
-  | "LEGACY"
-  | "GPT_IMAGE"
-  | "NANO_BANANA"
-  | "GEMINI_NATIVE_IMAGE"
-  | "SEEDREAM_IMAGES_API"
-  | "GROK_IMAGES_API"
-  | "GENERIC_OPENAI_IMAGE";
-
 export type AiModelRoute = {
   id: string;
   canonicalModelId: string | null;
@@ -27,7 +18,7 @@ export type AiModelRoute = {
   lastSyncedAt: string | null;
   costProfile: JsonObject | null;
   capabilitiesOverride: JsonObject | null;
-  adapterKey: ImageAdapterKey | null;
+  adapterKey: string | null;
   adapterConfig: JsonObject | null;
   metadata: JsonObject | null;
   pricingSyncStatus: string;
@@ -117,10 +108,36 @@ export type AdminAiUsageModelBinding = {
   canonicalModelId: string | null;
   canonicalModelKey: string | null;
   displayName: string | null;
+  fixedCredits: string | null;
   updatedAt: string | null;
   operational: boolean;
   route: AiModelRoute | null;
 };
+
+export type CapabilityOptionKind = "resolution" | "duration" | "aspectRatio";
+
+export function normalizeCapabilityOption(value: string, kind: CapabilityOptionKind) {
+  const normalized = value.trim().toLowerCase();
+  if (kind === "duration") {
+    const duration = Number(normalized);
+    if (!Number.isSafeInteger(duration) || duration <= 0 || duration > 600) {
+      throw new Error("时长必须是 1 到 600 秒的正整数");
+    }
+    return String(duration);
+  }
+  if (kind === "aspectRatio") {
+    if (!/^\d{1,5}:\d{1,5}$/.test(normalized)) throw new Error("画面比例格式应为宽:高，例如 21:9");
+    return normalized;
+  }
+  if (!/^[a-z0-9][a-z0-9._+-]{0,31}$/.test(normalized)) {
+    throw new Error("分辨率只能包含字母、数字、点、下划线、加号或连字符");
+  }
+  return normalized;
+}
+
+export function normalizeCapabilityOptions(values: string[], kind: CapabilityOptionKind) {
+  return Array.from(new Set(values.map(value => normalizeCapabilityOption(value, kind))));
+}
 
 export type AdminAiUsageModelBindings = {
   items: AdminAiUsageModelBinding[];

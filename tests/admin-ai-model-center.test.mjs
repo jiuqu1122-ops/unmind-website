@@ -11,6 +11,8 @@ import {
   marginDetails,
   marginPercent,
   modelMatchesModality,
+  normalizeCapabilityOption,
+  normalizeCapabilityOptions,
   parseJsonObject,
   priceDiffRows,
   priceSummary,
@@ -110,6 +112,11 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /usage-model-bindings/);
   assert.match(source, /IMAGE_ANALYSIS/);
   assert.match(source, /CANVAS_TEXT/);
+  assert.match(source, /fixedCredits/);
+  assert.match(source, /固定收费/);
+  assert.match(source, /480p.*540p.*576p.*720p.*768p.*1080p.*1440p.*2k.*4k/);
+  assert.match(source, /\+ 添加规格/);
+  assert.match(source, /MINIMAX_NATIVE_VIDEO/);
   assert.match(source, /USAGE_MODEL_NOT_AVAILABLE/);
   assert.match(source, /JSON\.stringify\(\{ canonicalModelKey: target \}\)/);
   assert.match(source, /body: JSON\.stringify\(draft\)/);
@@ -120,6 +127,18 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.doesNotMatch(source, /配置已被其他操作修改，请刷新后重试/);
   assert.doesNotMatch(source, /<textarea/);
   assert.doesNotMatch(source, /<input[^>]+upstreamModelId/);
+});
+
+test("normalizes dynamic video resolutions, durations, and aspect ratios", () => {
+  assert.deepEqual(normalizeCapabilityOptions([" 768P ", "768p", "2K", "1280x768"], "resolution"), [
+    "768p",
+    "2k",
+    "1280x768",
+  ]);
+  assert.deepEqual(normalizeCapabilityOptions(["3", "7", "20"], "duration"), ["3", "7", "20"]);
+  assert.equal(normalizeCapabilityOption(" 21:9 ", "aspectRatio"), "21:9");
+  assert.throws(() => normalizeCapabilityOption("601", "duration"), /600/);
+  assert.throws(() => normalizeCapabilityOption("../../bad", "resolution"), /分辨率/);
 });
 
 test("shows lifecycle state before route health", () => {

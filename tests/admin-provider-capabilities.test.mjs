@@ -92,6 +92,14 @@ test("admin console exposes ranged per-user image and token usage", async () => 
   assert.match(source, /缓存命中已包含在输入中，不重复相加/);
 });
 
+test("admin console no longer loads or exposes legacy pricing editors", async () => {
+  const source = await readFile(new URL("../app/admin/admin-console.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /\/v1\/admin\/pricing/);
+  assert.doesNotMatch(source, /\/v1\/admin\/chat-pricing/);
+  assert.doesNotMatch(source, /AI 定价（含文字节点）/);
+  assert.doesNotMatch(source, /onUseLegacy/);
+});
+
 test("production deployment pins the current prebuilt image and preserves HTTPS redirects", async () => {
   const [deploy, nginx] = await Promise.all([
     readFile(new URL("../scripts/deploy.sh", import.meta.url), "utf8"),

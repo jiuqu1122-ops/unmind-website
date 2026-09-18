@@ -4,18 +4,12 @@ import { FormEvent, useCallback, useState } from "react";
 import { apiBaseUrl } from "../site-shared";
 import {
   newProviderDraft,
-  normalizePricing,
   adminUsagePeriodLabel,
   membershipQuotasFromFreeQuota,
   membershipQuotaTypeForModality,
-  pricingLabel,
   providerKinds,
   providerMeta,
   providerToDraft,
-  videoPricingDraft,
-  type AdminAiPricing,
-  type AdminChatPricing,
-  type AdminChatTokenRates,
   type AdminLedgerEntry,
   type AdminMembershipPlan,
   type AdminMembershipQuotaPeriod,
@@ -30,13 +24,12 @@ import {
   type ProviderDraft,
   type RedemptionCode,
   type ReviewShare,
-  type VideoPricingDraft,
 } from "./admin-model";
 import { AiModelCenter } from "./ai-model-center";
 import type { AdminAiModelSummary } from "./ai-model-center-model";
 import styles from "./admin.module.css";
 
-type Tab = "users" | "usage" | "membership" | "codes" | "providers" | "models" | "pricing" | "reviews";
+type Tab = "users" | "usage" | "membership" | "codes" | "providers" | "models" | "reviews";
 type AuthorizationStatus = "ACTIVE" | "SUSPENDED" | "DISABLED";
 
 const formatCredits = (value?: string | null) => {
@@ -79,7 +72,6 @@ const operationKey = (prefix: string) => (
   `${prefix}-${crypto.randomUUID().replace(/-/g, "")}`
 );
 
-const creditPattern = /^(?:0|[1-9]\d{0,6})$/;
 const membershipDiscountPattern = /^(?:0|[1-9](?:\.\d{1,2})?|10(?:\.0{1,2})?)$/;
 type MembershipDiscountKey = "gptImage1K" | "chat" | "video" | "other";
 type MembershipDiscountDraft = Record<MembershipDiscountKey, string>;
@@ -132,8 +124,6 @@ export function AdminConsole() {
   const [providers, setProviders] = useState<AdminProvider[]>([]);
   const [providerDraft, setProviderDraft] = useState<ProviderDraft>(() => newProviderDraft());
   const [providerBalance, setProviderBalance] = useState<ProviderBalance | null>(null);
-  const [pricing, setPricing] = useState<AdminAiPricing | null>(null);
-  const [chatPricing, setChatPricing] = useState<AdminChatPricing | null>(null);
   const [membershipPlans, setMembershipPlans] = useState<AdminMembershipPlan[]>([]);
   const [membershipModels, setMembershipModels] = useState<AdminAiModelSummary[]>([]);
   const [referralRules, setReferralRules] = useState<AdminReferralRule[]>([]);
@@ -150,7 +140,6 @@ export function AdminConsole() {
   const [ruleRechargeInviterCredits, setRuleRechargeInviterCredits] = useState("0");
   const [ruleRechargeInviteeCredits, setRuleRechargeInviteeCredits] = useState("0");
   const [ruleRechargeMin, setRuleRechargeMin] = useState("0");
-  const [videoAdvanced, setVideoAdvanced] = useState<Record<number, VideoPricingDraft>>({});
   const [tab, setTab] = useState<Tab>("users");
   const [query, setQuery] = useState("");
   const [amount, setAmount] = useState("1000");
@@ -187,25 +176,15 @@ export function AdminConsole() {
     return parseResponse<T>(response);
   }, [adminKey]);
 
-  const applyPricing = (value: AdminAiPricing) => {
-    const normalized = normalizePricing(value);
-    setPricing(normalized);
-    setVideoAdvanced(Object.fromEntries(
-      normalized.videoModels.map((item, index) => [index, videoPricingDraft(item)]),
-    ));
-  };
-
   const refreshDashboard = useCallback(async (credential: string, search = "") => {
     const queryString = search ? `?query=${encodeURIComponent(search)}&limit=80` : "?limit=80";
-    const [nextOverview, nextTodayUsage, userPage, codePage, sharePage, providerPage, nextPricing, nextChatPricing] = await Promise.all([
+    const [nextOverview, nextTodayUsage, userPage, codePage, sharePage, providerPage] = await Promise.all([
       request<AdminOverview>("/v1/admin/overview", {}, credential),
       request<AdminTodayUsage>("/v1/admin/usage?days=1", {}, credential),
       request<{ items: AdminUser[] }>(`/v1/admin/users${queryString}`, {}, credential),
       request<{ items: RedemptionCode[] }>("/v1/admin/redemption-codes?limit=200", {}, credential),
       request<{ items: ReviewShare[] }>("/v1/admin/inspiration-space?limit=200", {}, credential),
       request<{ items: AdminProvider[] }>("/v1/admin/providers", {}, credential),
-      request<AdminAiPricing>("/v1/admin/pricing", {}, credential),
-      request<AdminChatPricing>("/v1/admin/chat-pricing", {}, credential),
     ]);
     setOverview(nextOverview);
     setTodayUsage(nextTodayUsage);
@@ -214,8 +193,6 @@ export function AdminConsole() {
     setReviews(sharePage.items);
     setProviders(providerPage.items);
     setProviderDraft(providerPage.items[0] ? providerToDraft(providerPage.items[0]) : newProviderDraft());
-    applyPricing(nextPricing);
-    setChatPricing(nextChatPricing);
   }, [request]);
 
   const refreshUsers = async (search = query) => {
@@ -523,8 +500,6 @@ export function AdminConsole() {
     setMembershipModels([]);
     setReferralRules([]);
     resetMembershipForm();
-    setPricing(null);
-    setChatPricing(null);
     setProviderDraft(newProviderDraft());
     setProviderBalance(null);
     clearMessage();
@@ -782,189 +757,6 @@ export function AdminConsole() {
     }
   };
 
-  const updateImagePrice = (index: number, field: "credits1k" | "credits2k" | "credits4k", value: string) => {
-    setPricing((current) => current ? {
-      ...current,
-      imageModels: current.imageModels.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item),
-    } : current);
-  };
-
-  const updateChatTokenRate = (
-    index: number,
-    tier: "standard" | "extended",
-    field: keyof AdminChatTokenRates,
-    value: string,
-  ) => {
-    setChatPricing((current) => current ? {
-      ...current,
-      models: current.models.map((item, itemIndex) => (
-        itemIndex === index && item.billingMode === "token"
-          ? { ...item, [tier]: { ...item[tier], [field]: value } }
-          : item
-      )),
-    } : current);
-  };
-
-  const updateChatThreshold = (index: number, value: string) => {
-    setChatPricing((current) => current ? {
-      ...current,
-      models: current.models.map((item, itemIndex) => (
-        itemIndex === index && item.billingMode === "token"
-          ? { ...item, contextThresholdTokens: Number(value) }
-          : item
-      )),
-    } : current);
-  };
-
-  const updateChatRequestPrice = (index: number, value: string) => {
-    setChatPricing((current) => current ? {
-      ...current,
-      models: current.models.map((item, itemIndex) => (
-        itemIndex === index && item.billingMode === "request"
-          ? { ...item, creditsPerRequest: value }
-          : item
-      )),
-    } : current);
-  };
-
-  const saveChatPricing = async () => {
-    if (!chatPricing) return;
-    const values = chatPricing.models.flatMap((item) => item.billingMode === "request"
-      ? [item.creditsPerRequest]
-      : [
-        ...Object.values(item.standard),
-        ...Object.values(item.extended),
-      ]);
-    if (values.some((value) => !creditPattern.test(value))) {
-      setError("Chat Token 单价必须是 0 到 1000000 的整数");
-      return;
-    }
-    if (chatPricing.models.some((item) => item.billingMode === "token" && (
-      !Number.isSafeInteger(item.contextThresholdTokens)
-      || item.contextThresholdTokens < 1
-      || item.contextThresholdTokens > 10_000_000
-    ))) {
-      setError("上下文分档必须是 1 到 10000000 的整数 Token");
-      return;
-    }
-    setBusy(true);
-    clearMessage();
-    try {
-      const result = await request<AdminChatPricing>("/v1/admin/chat-pricing", {
-        method: "PATCH",
-        body: JSON.stringify({ models: chatPricing.models }),
-      });
-      setChatPricing(result);
-      setNotice("Chat Token 定价已保存并立即生效");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "保存 Chat Token 定价失败");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const updateVideoPrice = (index: number, value: string) => {
-    setPricing((current) => current ? {
-      ...current,
-      videoModels: current.videoModels.map((item, itemIndex) => itemIndex === index ? { ...item, credits: value } : item),
-    } : current);
-  };
-
-  const updateVideoAdvanced = (index: number, field: keyof VideoPricingDraft, value: string) => {
-    setVideoAdvanced((current) => ({
-      ...current,
-      [index]: { ...(current[index] || videoPricingDraft()), [field]: value },
-    }));
-  };
-
-  const parseCreditMap = (text: string) => {
-    if (!text.trim()) return undefined;
-    const parsed: unknown = JSON.parse(text);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("视频高级定价必须是 JSON 对象");
-    }
-    const result: Record<string, string> = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      if (!key.trim() || typeof value !== "string" || !creditPattern.test(value)) {
-        throw new Error("视频高级定价中的积分必须是 0 到 1000000 的整数字符串");
-      }
-      result[key.trim()] = value;
-    }
-    return result;
-  };
-
-  const parseIncludedReferenceImages = (text: string) => {
-    if (!text.trim()) return undefined;
-    const parsed = Number(text);
-    if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 100) {
-      throw new Error("免费参考图片数量必须是 0 到 100 的整数");
-    }
-    return parsed;
-  };
-
-  const savePricing = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!pricing) return;
-    let videoModels: AdminAiPricing["videoModels"];
-    try {
-      videoModels = pricing.videoModels.map((item, index) => {
-        const advanced = videoAdvanced[index] || videoPricingDraft(item);
-        return {
-          ...item,
-          creditsPerSecond: advanced.creditsPerSecond.trim() || undefined,
-          creditsPerVideo: advanced.creditsPerVideo.trim() || undefined,
-          creditsByDuration: parseCreditMap(advanced.creditsByDuration),
-          creditsByResolution: parseCreditMap(advanced.creditsByResolution),
-          creditsByCount: parseCreditMap(advanced.creditsByCount),
-          includedReferenceImages: parseIncludedReferenceImages(advanced.includedReferenceImages),
-          creditsPerExtraReferenceImage: advanced.creditsPerExtraReferenceImage.trim() || undefined,
-          creditsPerReferenceVideoSecond: advanced.creditsPerReferenceVideoSecond.trim() || undefined,
-          referenceVideoCreditsByResolution: parseCreditMap(advanced.referenceVideoCreditsByResolution),
-        };
-      });
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "视频高级定价格式无效");
-      return;
-    }
-    const values = [
-      pricing.agentRequestCredits,
-      pricing.inspirationAnalysisCredits,
-      pricing.canvasTextAgentCredits,
-      pricing.imageDefaultCredits,
-      pricing.videoDefaultCredits,
-      ...pricing.imageModels.flatMap((item) => [item.credits1k, item.credits2k, item.credits4k].filter(Boolean)),
-      ...videoModels.flatMap((item) => [
-        item.credits,
-        item.creditsPerSecond,
-        item.creditsPerVideo,
-        item.creditsPerExtraReferenceImage,
-        item.creditsPerReferenceVideoSecond,
-        ...Object.values(item.creditsByDuration || {}),
-        ...Object.values(item.creditsByResolution || {}),
-        ...Object.values(item.creditsByCount || {}),
-        ...Object.values(item.referenceVideoCreditsByResolution || {}),
-      ].filter(Boolean)),
-    ];
-    if (values.some((value) => !creditPattern.test(String(value)))) {
-      setError("所有积分必须是 0 到 1000000 的整数");
-      return;
-    }
-    setBusy(true);
-    clearMessage();
-    try {
-      const result = await request<AdminAiPricing>("/v1/admin/pricing", {
-        method: "PATCH",
-        body: JSON.stringify({ ...pricing, videoModels, updatedAt: undefined }),
-      });
-      applyPricing(result);
-      setNotice("AI 积分定价已保存并立即生效");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "保存 AI 定价失败");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const updateReview = async (shareId: string, status: ReviewShare["status"]) => {
     setBusy(true);
     clearMessage();
@@ -1054,7 +846,6 @@ export function AdminConsole() {
         <button className={tab === "codes" ? styles.active : ""} onClick={() => setTab("codes")}>兑换码</button>
         <button className={tab === "providers" ? styles.active : ""} onClick={() => setTab("providers")}>渠道管理</button>
         <button className={tab === "models" ? styles.active : ""} onClick={() => setTab("models")}>AI Model Center</button>
-        <button className={tab === "pricing" ? styles.active : ""} onClick={() => setTab("pricing")}>AI 定价（含文字节点）</button>
         <button className={tab === "reviews" ? styles.active : ""} onClick={() => setTab("reviews")}>灵感空间审核</button>
       <button className={tab === "membership" ? styles.active : ""} onClick={() => { setTab("membership"); void refreshMembership().catch((reason) => setError(reason instanceof Error ? reason.message : "会员配置加载失败")); }}>会员与邀请</button>
       </nav>
@@ -1425,109 +1216,7 @@ export function AdminConsole() {
           providers={providers}
           onError={setError}
           onNotice={setNotice}
-          onUseLegacy={() => setTab("pricing")}
         />
-      )}
-
-      {tab === "pricing" && pricing && chatPricing && (
-        <div className={styles.pricingShell}>
-          <section className={styles.panel}>
-            <div className={styles.panelTitle}><strong>Chat Token 定价</strong><span>Token 模型按 1M 计费，Luna 按次计费</span></div>
-            <p className={styles.pricingFormula}>正常输入 Token = 输入 Token − 缓存读取 Token；总价按正常输入、缓存读取、输出和缓存写入分别计价后合计。</p>
-            <div className={styles.chatPricingHeader} aria-hidden="true">
-              <span>模型</span><span>上下文</span><span>输入 /1M</span><span>输出 /1M</span><span>缓存读取 /1M</span><span>缓存写入 /1M</span>
-            </div>
-            <div className={styles.chatPricingList}>
-              {chatPricing.models.flatMap((item, index) => {
-                if (item.billingMode === "request") {
-                  return [(
-                    <article className={styles.chatPricingRow} key={item.model}>
-                      <strong>{item.model}</strong>
-                      <span className={styles.contextLabel}>按次</span>
-                      <label className={styles.requestChatPrice}><span>每次积分</span><input type="number" min={0} max={1000000} value={item.creditsPerRequest} onChange={(event) => updateChatRequestPrice(index, event.target.value)} /></label>
-                    </article>
-                  )];
-                }
-                return (["standard", "extended"] as const).map((tier) => {
-                  const rates = item[tier];
-                  return (
-                    <article className={styles.chatPricingRow} key={`${item.model}-${tier}`}>
-                      <strong>{item.model}</strong>
-                      {tier === "standard"
-                        ? <label className={styles.contextInput}><span>≤ Token</span><input type="number" min={1} max={10000000} value={item.contextThresholdTokens} onChange={(event) => updateChatThreshold(index, event.target.value)} /></label>
-                        : <span className={styles.contextLabel}>&gt; {item.contextThresholdTokens.toLocaleString("zh-CN")}</span>}
-                      {([
-                        ["inputCreditsPerMillion", "输入 /1M"],
-                        ["outputCreditsPerMillion", "输出 /1M"],
-                        ["cachedInputCreditsPerMillion", "缓存读取 /1M"],
-                        ["cacheWriteCreditsPerMillion", "缓存写入 /1M"],
-                      ] as const).map(([field, label]) => (
-                        <label key={field}><span>{label}</span><input type="number" min={0} max={1000000} value={rates[field]} onChange={(event) => updateChatTokenRate(index, tier, field, event.target.value)} /></label>
-                      ))}
-                    </article>
-                  );
-                });
-              })}
-            </div>
-            <div className={styles.chatPricingSave}>
-              <span>{chatPricing.updatedAt ? `最近保存：${formatDateTime(chatPricing.updatedAt)}` : "当前使用初始定价"}</span>
-              <button type="button" disabled={busy} onClick={() => void saveChatPricing()}>保存 Chat 计价</button>
-            </div>
-          </section>
-          <form className={styles.pricingForm} onSubmit={savePricing}>
-          <section className={styles.panel}>
-            <div className={styles.panelTitle}><strong>任务与基础定价</strong><span>积分</span></div>
-            <div className={styles.basePricingGrid}>
-              <label><strong>Agent 请求</strong><input type="number" min={0} max={1000000} value={pricing.agentRequestCredits} onChange={(event) => setPricing({ ...pricing, agentRequestCredits: event.target.value })} /></label>
-              <label><strong>图片分析</strong><input type="number" min={0} max={1000000} value={pricing.inspirationAnalysisCredits} onChange={(event) => setPricing({ ...pricing, inspirationAnalysisCredits: event.target.value })} /></label>
-              <label><strong>文字分析节点 / 次</strong><input type="number" min={0} max={1000000} value={pricing.canvasTextAgentCredits} onChange={(event) => setPricing({ ...pricing, canvasTextAgentCredits: event.target.value })} /><small>仅画布文字分析节点按次结算；普通 Chat 和工作流仍按 Token</small></label>
-              <label><strong>其他生图默认</strong><input type="number" min={0} max={1000000} value={pricing.imageDefaultCredits} onChange={(event) => setPricing({ ...pricing, imageDefaultCredits: event.target.value })} /></label>
-              <label><strong>其他视频每秒</strong><input type="number" min={0} max={1000000} value={pricing.videoDefaultCredits} onChange={(event) => setPricing({ ...pricing, videoDefaultCredits: event.target.value })} /></label>
-            </div>
-          </section>
-          <section className={styles.panel}>
-            <div className={styles.panelTitle}><strong>生图模型</strong><span>按张计费</span></div>
-            <div className={styles.imagePricingList}>
-              {pricing.imageModels.map((item, index) => (
-                <article key={item.model}>
-                  <strong>{pricingLabel(item.model)}</strong>
-                  {item.credits1k !== undefined && <label><span>1K</span><input type="number" min={0} max={1000000} value={item.credits1k} onChange={(event) => updateImagePrice(index, "credits1k", event.target.value)} /></label>}
-                  <label><span>2K</span><input type="number" min={0} max={1000000} value={item.credits2k} onChange={(event) => updateImagePrice(index, "credits2k", event.target.value)} /></label>
-                  <label><span>4K</span><input type="number" min={0} max={1000000} value={item.credits4k} onChange={(event) => updateImagePrice(index, "credits4k", event.target.value)} /></label>
-                </article>
-              ))}
-            </div>
-          </section>
-          <section className={styles.panel}>
-            <div className={styles.panelTitle}><strong>视频模型</strong><span>按秒计费</span></div>
-            <div className={styles.videoPricingList}>
-              {pricing.videoModels.map((item, index) => (
-                <article key={item.model}>
-                  <div className={styles.videoPriceHead}><strong>{pricingLabel(item.model)}</strong><label><span>每秒积分</span><input type="number" min={0} max={1000000} value={item.credits} onChange={(event) => updateVideoPrice(index, event.target.value)} /></label></div>
-                  <details>
-                    <summary>高级定价</summary>
-                    <div className={styles.advancedGrid}>
-                      <label><strong>每秒价格覆盖</strong><input type="number" min={0} max={1000000} value={videoAdvanced[index]?.creditsPerSecond ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsPerSecond", event.target.value)} /></label>
-                      <label><strong>每条额外加分</strong><input type="number" min={0} max={1000000} value={videoAdvanced[index]?.creditsPerVideo ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsPerVideo", event.target.value)} /></label>
-                      <label><strong>指定时长总价</strong><input value={videoAdvanced[index]?.creditsByDuration ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsByDuration", event.target.value)} placeholder='{"4":"100"}' /></label>
-                      <label><strong>清晰度每秒加分</strong><input value={videoAdvanced[index]?.creditsByResolution ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsByResolution", event.target.value)} placeholder='{"2k":"20"}' /></label>
-                      <label><strong>多条生成总价</strong><input value={videoAdvanced[index]?.creditsByCount ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsByCount", event.target.value)} placeholder='{"2":"300"}' /></label>
-                    </div>
-                    <div className={styles.materialPricingTitle}><strong>输入素材计费</strong><span>音频免费；参考视频按生成时长和输出清晰度计费</span></div>
-                    <div className={styles.advancedGrid}>
-                      <label><strong>免费参考图片数</strong><input type="number" min={0} max={100} step={1} value={videoAdvanced[index]?.includedReferenceImages ?? ""} onChange={(event) => updateVideoAdvanced(index, "includedReferenceImages", event.target.value)} placeholder="H3 默认 5" /></label>
-                      <label><strong>超额图片每张积分</strong><input type="number" min={0} max={1000000} step={1} value={videoAdvanced[index]?.creditsPerExtraReferenceImage ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsPerExtraReferenceImage", event.target.value)} placeholder="H3 默认 9" /></label>
-                      <label><strong>参考视频每秒积分</strong><input type="number" min={0} max={1000000} step={1} value={videoAdvanced[index]?.creditsPerReferenceVideoSecond ?? ""} onChange={(event) => updateVideoAdvanced(index, "creditsPerReferenceVideoSecond", event.target.value)} placeholder="768P 基础价 15" /></label>
-                      <label><strong>参考视频清晰度每秒加分</strong><input value={videoAdvanced[index]?.referenceVideoCreditsByResolution ?? ""} onChange={(event) => updateVideoAdvanced(index, "referenceVideoCreditsByResolution", event.target.value)} placeholder='{"2k":"10"}' /></label>
-                    </div>
-                  </details>
-                </article>
-              ))}
-            </div>
-          </section>
-          <div className={styles.saveBar}><span>{pricing.updatedAt ? `最近保存：${formatDateTime(pricing.updatedAt)}` : "尚未保存自定义定价"}</span><button disabled={busy}>保存并立即生效</button></div>
-          </form>
-        </div>
       )}
 
       {tab === "reviews" && (

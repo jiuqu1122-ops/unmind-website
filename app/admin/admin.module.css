@@ -98,11 +98,11 @@
 .walletGrid small { color: #8190a7; font-size: 10px; }
 .walletGrid strong { overflow: hidden; color: #1d4fae; font-size: 17px; letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .compactForm { padding-top: 16px; display: grid; gap: 12px; border-top: 1px solid #edf0f5; }
-.compactForm label,.providerForm label,.basePricingGrid label,.imagePricingList label,.videoPricingList label { display: grid; gap: 7px; color: #4e5b70; font-size: 11px; }
-.compactForm input,.compactForm select,.providerForm input,.providerForm select,.providerForm textarea,.basePricingGrid input,.imagePricingList input,.videoPricingList input { width: 100%; min-width: 0; min-height: 40px; padding: 0 11px; border: 1px solid #d9e1ee; border-radius: 10px; outline: none; background: #f9fbff; color: #172033; font: inherit; }
-.providerForm textarea,.videoPricingList input:not([type="number"]) { padding-top: 10px; padding-bottom: 10px; }
-.compactForm input:focus,.compactForm select:focus,.providerForm input:focus,.providerForm select:focus,.providerForm textarea:focus,.basePricingGrid input:focus,.imagePricingList input:focus,.videoPricingList input:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
-.compactForm button,.providerForm > button,.saveBar button,.chatPricingSave button { min-height: 40px; justify-self: start; padding: 0 16px; border: 0; border-radius: 10px; background: #2868ed; color: white; font-weight: 850; cursor: pointer; }
+.compactForm label,.providerForm label { display: grid; gap: 7px; color: #4e5b70; font-size: 11px; }
+.compactForm input,.compactForm select,.providerForm input,.providerForm select,.providerForm textarea { width: 100%; min-width: 0; min-height: 40px; padding: 0 11px; border: 1px solid #d9e1ee; border-radius: 10px; outline: none; background: #f9fbff; color: #172033; font: inherit; }
+.providerForm textarea { padding-top: 10px; padding-bottom: 10px; }
+.compactForm input:focus,.compactForm select:focus,.providerForm input:focus,.providerForm select:focus,.providerForm textarea:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
+.compactForm button,.providerForm > button { min-height: 40px; justify-self: start; padding: 0 16px; border: 0; border-radius: 10px; background: #2868ed; color: white; font-weight: 850; cursor: pointer; }
 .sectionTitle { color: #172033; font-size: 13px; font-weight: 900; }
 .formGridThree { display: grid; grid-template-columns: 1.2fr 1fr .8fr; gap: 10px; }
 .ledgerList { max-height: 290px; margin-top: 10px; display: grid; overflow: auto; scrollbar-width: thin; }
@@ -127,7 +127,7 @@
 .providerList em { color: #8894a7; font-size: 10px; font-style: normal; font-weight: 850; white-space: nowrap; }
 .providerList em[data-ok="true"] { color: #16835f; }
 .providerForm { display: grid; gap: 14px; }
-.providerForm > label > strong,.basePricingGrid strong,.imagePricingList label span,.videoPricingList label strong { color: #4e5b70; font-size: 11px; }
+.providerForm > label > strong { color: #4e5b70; font-size: 11px; }
 .fieldHint { color: #7a879b; font-size: 10px; line-height: 1.5; }
 .providerForm .panelTitle { margin-bottom: 2px; }
 .inlineCheck { display: flex!important; align-items: center; gap: 8px!important; color: #4e5b70; font-size: 11px; }
@@ -141,39 +141,6 @@
 .actionRow button:disabled { cursor: wait; opacity: .55; }
 .actionRow .ghost { border: 1px solid #dbe3f0; background: white; color: #5f6d84; }
 .actionRow .danger { border: 1px solid #f5caca; background: #fff5f5; color: #d64646; }
-.pricingShell { margin-top: 16px; display: grid; gap: 14px; }
-.pricingShell .panel { min-height: 0; }
-.pricingForm { display: grid; gap: 14px; }
-.pricingFormula { margin: 12px 0 0; color: #71809a; font-size: 10px; line-height: 1.7; }
-.chatPricingHeader,.chatPricingRow { display: grid; grid-template-columns: minmax(150px,1.1fr) minmax(125px,.8fr) repeat(4,minmax(100px,.72fr)); gap: 9px; align-items: end; }
-.chatPricingHeader { margin-top: 16px; padding: 0 11px 8px; border-bottom: 1px solid #e3e8f1; color: #8591a5; font-size: 9px; font-weight: 800; }
-.chatPricingList { display: grid; }
-.chatPricingRow { padding: 10px 11px; border-bottom: 1px solid #edf0f5; }
-.chatPricingRow > strong { align-self: center; color: #26344b; font-size: 11px; }
-.chatPricingRow label { min-width: 0; display: grid; gap: 6px; color: #7b8799; font-size: 9px; }
-.chatPricingRow input { width: 100%; min-width: 0; min-height: 38px; padding: 0 10px; border: 1px solid #d9e1ee; border-radius: 9px; outline: none; background: #f9fbff; color: #172033; font: inherit; font-variant-numeric: tabular-nums; }
-.chatPricingRow input:focus { border-color: #4b82f7; box-shadow: 0 0 0 3px rgba(47,114,255,.1); }
-.contextLabel { align-self: center; color: #617089; font-size: 10px; font-variant-numeric: tabular-nums; }
-.requestChatPrice { grid-column: 3 / -1; max-width: 180px; }
-.chatPricingSave { padding-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #71809a; font-size: 10px; }
-.chatPricingSave button:disabled { cursor: wait; opacity: .55; }
-.basePricingGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; }
-.imagePricingList { margin-top: 13px; display: grid; gap: 8px; }
-.imagePricingList article { padding: 11px; display: grid; grid-template-columns: minmax(150px,1fr) repeat(3, minmax(70px, .4fr)); align-items: end; gap: 9px; border-bottom: 1px solid #edf0f5; }
-.imagePricingList article > strong { padding-bottom: 10px; font-size: 12px; }
-.imagePricingList label span { font-size: 9px; }
-.videoPricingList { margin-top: 13px; display: grid; gap: 8px; }
-.videoPricingList article { padding: 12px; border: 1px solid #e7ebf2; border-radius: 12px; background: #fafcff; }
-.videoPriceHead { display: grid; grid-template-columns: 1fr minmax(160px,.4fr); align-items: end; gap: 12px; }
-.videoPriceHead > strong { padding-bottom: 10px; font-size: 12px; }
-.videoPricingList details { margin-top: 10px; border-top: 1px solid #e7ebf2; }
-.videoPricingList summary { padding-top: 10px; color: #5a75a5; cursor: pointer; font-size: 10px; font-weight: 850; }
-.advancedGrid { padding-top: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; }
-.materialPricingTitle { margin-top: 12px; padding-top: 12px; display: flex; align-items: baseline; gap: 8px; border-top: 1px solid #e7ebf2; }
-.materialPricingTitle strong { color: #334155; font-size: 11px; }
-.materialPricingTitle span { color: #7b8799; font-size: 9px; }
-.saveBar { position: sticky; bottom: 12px; z-index: 1; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #d9e1ee; border-radius: 13px; background: rgba(255,255,255,.94); box-shadow: 0 12px 30px rgba(35,57,96,.1); color: #71809a; font-size: 10px; backdrop-filter: blur(10px); }
-.saveBar button:disabled { cursor: wait; opacity: .55; }
 .usageDashboard { margin-top: 16px; display: grid; gap: 14px; }
 .usageHeader { padding: 22px 24px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; border: 1px solid #e0e6f0; border-radius: 20px; background: white; }
 .usageHeader > div { min-width: 0; }
@@ -215,11 +182,6 @@
   .twoColumns { grid-template-columns: 1fr; }
   .providerShell { grid-template-columns: 1fr; }
   .reviewGrid { grid-template-columns: repeat(2,1fr); }
-  .basePricingGrid { grid-template-columns: repeat(2,1fr); }
-  .chatPricingHeader { display: none; }
-  .chatPricingRow { grid-template-columns: repeat(2,1fr); padding: 14px 0; }
-  .chatPricingRow > strong { grid-column: 1 / -1; }
-  .requestChatPrice { grid-column: 1 / -1; }
 }
 @media (max-width: 640px) {
   .console { width: calc(100% - 28px); padding-top: 32px; }
@@ -235,19 +197,9 @@
   .panel { min-height: 0; }
   .loginCard { padding: 26px 20px; }
   .walletGrid { grid-template-columns: repeat(2,1fr); }
-  .formGridThree,.formGrid,.basePricingGrid,.advancedGrid,.membershipPriceGrid,.membershipQuotaRow { grid-template-columns: 1fr; }
+  .formGridThree,.formGrid,.membershipPriceGrid,.membershipQuotaRow { grid-template-columns: 1fr; }
   .membershipQuotaRow > button { justify-self: start; }
   .customPriceRow { grid-template-columns: 1fr; }
-  .imagePricingList article { grid-template-columns: 1fr 1fr; }
-  .imagePricingList article > strong { grid-column: 1 / -1; padding-bottom: 0; }
-  .videoPriceHead { grid-template-columns: 1fr; }
-  .chatPricingRow { grid-template-columns: 1fr; }
-  .chatPricingRow > strong,.requestChatPrice { grid-column: auto; }
-  .chatPricingSave { align-items: stretch; flex-direction: column; }
-  .chatPricingSave button { width: 100%; }
-  .materialPricingTitle { align-items: flex-start; flex-direction: column; gap: 3px; }
-  .saveBar { align-items: stretch; flex-direction: column; }
-  .saveBar button { width: 100%; }
 }
 
 /* AI Model Center v2 — operations-first workspace */
@@ -371,6 +323,13 @@
 .choiceField > div { display: flex; flex-wrap: wrap; gap: 5px; }
 .choiceField label { padding: 5px 7px; display: flex; align-items: center; gap: 4px; border-radius: 7px; background: #f0f3f8; }
 .choiceField input { width: 13px; min-height: 13px; }
+.editableChoiceField { display: grid; gap: 8px; }
+.editableChoiceField > div.choiceChips { display: flex; flex-wrap: wrap; gap: 5px; }
+.choiceChips button { min-height: 27px; padding: 4px 8px; border: 1px solid #ccdaee; border-radius: 999px; background: #edf4ff; color: #315f9f; font-size: 9px; }
+.customChoiceInput { display: grid!important; grid-template-columns: minmax(0,1fr) auto!important; gap: 6px!important; }
+.customChoiceInput input { min-width: 0; min-height: 34px; padding: 0 9px; border: 1px solid #d9e1ee; border-radius: 8px; background: white; }
+.customChoiceInput button { min-height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: #2868ed; color: white; font-size: 9px; font-weight: 800; }
+.choiceValidation { color: #b33b47; font-size: 8px; }
 .pricingCard { background: #fcfdff; }
 .priceOverviewV2 { display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; }
 .priceOverviewV2 article { min-width: 0; padding: 12px; display: grid; gap: 4px; border: 1px solid #dfe6f1; border-radius: 11px; background: #f7f9fd; }
