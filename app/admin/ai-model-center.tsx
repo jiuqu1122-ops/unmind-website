@@ -395,11 +395,19 @@ const defaultCapabilities = (modality: AiModelModality): JsonObject => modality 
   supportedOutputFormats: ["jpg", "png"],
 } : modality === "video" ? {
   supportedResolutions: ["720p", "1080p"],
+  defaultResolution: "720p",
+  durationMode: "list",
   supportedDurations: [5, 10],
+  defaultDurationSeconds: 5,
+  aspectRatioMode: "list",
   supportedAspectRatios: ["1:1", "16:9", "9:16"],
+  defaultAspectRatio: "16:9",
   supportsTextPrompt: true,
+  minReferenceImages: 0,
   maxReferenceImages: 9,
+  minReferenceVideos: 0,
   maxReferenceVideos: 3,
+  minReferenceAudios: 0,
   maxReferenceAudios: 3,
   supportsReferenceImage: true,
   supportsReferenceVideo: true,
@@ -552,6 +560,16 @@ function CapabilitiesEditor({ modality, value, onChange, compact = false }: {
   compact?: boolean;
 }) {
   const update = (key: string, next: unknown) => onChange({ ...value, [key]: next });
+  const updateReferenceSupport = (
+    supportKey: string,
+    minKey: string,
+    maxKey: string,
+    supported: boolean,
+  ) => onChange({
+    ...value,
+    [supportKey]: supported,
+    ...(!supported ? { [minKey]: 0, [maxKey]: 0 } : {}),
+  });
   if (modality === "chat") {
     const tiers = Array.isArray(value.contextTiers) ? value.contextTiers.map(objectValue) : [];
     const standard = tiers[0] ?? {};
@@ -577,6 +595,13 @@ function CapabilitiesEditor({ modality, value, onChange, compact = false }: {
     );
   }
   const imageResolutions = [{ value: "1k", label: "1K" }, { value: "2k", label: "2K" }, { value: "4k", label: "4K" }];
+  const durationMode = ["list", "range", "fixed"].includes(String(value.durationMode))
+    ? String(value.durationMode)
+    : "list";
+  const durationRange = objectValue(value.durationRange);
+  const aspectRatioMode = ["list", "any", "unspecified"].includes(String(value.aspectRatioMode))
+    ? String(value.aspectRatioMode)
+    : "list";
   return (
     <div className={styles.structuredForm} data-compact={compact}>
       {modality === "image" ? <>
@@ -584,22 +609,71 @@ function CapabilitiesEditor({ modality, value, onChange, compact = false }: {
         <ToggleChoices label="支持比例" values={["1:1", "3:4", "4:3", "9:16", "16:9"].map((item) => ({ value: item, label: item }))} selected={stringArray(value.supportedAspectRatios)} onChange={(next) => update("supportedAspectRatios", next)} />
       </> : <>
         <EditableCapabilityChoices label="支持分辨率" presets={["480p", "540p", "576p", "720p", "768p", "1080p", "1440p", "2k", "4k"]} selected={stringArray(value.supportedResolutions)} kind="resolution" onChange={(next) => update("supportedResolutions", next)} />
-        <EditableCapabilityChoices label="支持时长" presets={["3", "4", "5", "6", "8", "10", "12", "15"]} selected={numberArray(value.supportedDurations).map(String)} kind="duration" onChange={(next) => update("supportedDurations", next.map(Number))} />
-        <EditableCapabilityChoices label="支持比例" presets={["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"]} selected={stringArray(value.supportedAspectRatios)} kind="aspectRatio" onChange={(next) => update("supportedAspectRatios", next)} />
+        <div className={styles.formGrid}>
+          <label><strong>默认分辨率</strong><select value={String(value.defaultResolution ?? "")} onChange={(event) => update("defaultResolution", event.target.value)}><option value="">未设置</option>{stringArray(value.supportedResolutions).map((item) => <option key={item} value={item}>{item.toUpperCase()}</option>)}</select></label>
+          <label><strong>时长模式</strong><select value={durationMode} onChange={(event) => {
+            const nextMode = event.target.value;
+            if (nextMode === "fixed") {
+              const fixed = numberArray(value.supportedDurations)[0]
+                || Number(value.defaultDurationSeconds)
+                || Number(durationRange.min)
+                || 1;
+              onChange({ ...value, durationMode: nextMode, supportedDurations: [fixed], defaultDurationSeconds: fixed });
+              return;
+            }
+            if (nextMode === "range") {
+              const fallback = Number(value.defaultDurationSeconds) || numberArray(value.supportedDurations)[0] || 1;
+              onChange({
+                ...value,
+                durationMode: nextMode,
+                durationRange: Object.keys(durationRange).length > 0
+                  ? durationRange
+                  : { min: fallback, max: fallback, step: 1 },
+                defaultDurationSeconds: fallback,
+              });
+              return;
+            }
+            onChange({ ...value, durationMode: nextMode });
+          }}><option value="list">离散值</option><option value="range">连续范围</option><option value="fixed">固定时长</option></select></label>
+        </div>
+        {durationMode === "list" && <EditableCapabilityChoices label="支持时长" presets={["3", "4", "5", "6", "8", "10", "12", "15", "30"]} selected={numberArray(value.supportedDurations).map(String)} kind="duration" onChange={(next) => update("supportedDurations", next.map(Number))} />}
+        {durationMode === "fixed" && <div className={styles.formGrid}><label><strong>固定秒数</strong><input type="number" min={1} max={600} value={textValue(numberArray(value.supportedDurations)[0] ?? value.defaultDurationSeconds ?? "")} onChange={(event) => onChange({ ...value, supportedDurations: [Number(event.target.value)], defaultDurationSeconds: Number(event.target.value) })} /></label></div>}
+        {durationMode === "range" && <div className={styles.formGrid}>
+          <label><strong>最短秒数</strong><input type="number" min={1} max={600} value={textValue(durationRange.min)} onChange={(event) => update("durationRange", { ...durationRange, min: Number(event.target.value) })} /></label>
+          <label><strong>最长秒数</strong><input type="number" min={1} max={600} value={textValue(durationRange.max)} onChange={(event) => update("durationRange", { ...durationRange, max: Number(event.target.value) })} /></label>
+          <label><strong>步长</strong><input type="number" min={1} max={600} value={textValue(durationRange.step ?? 1)} onChange={(event) => update("durationRange", { ...durationRange, step: Number(event.target.value) })} /></label>
+        </div>}
+        {durationMode !== "fixed" && <div className={styles.formGrid}><label><strong>默认时长</strong><input type="number" min={1} max={600} value={textValue(value.defaultDurationSeconds)} onChange={(event) => update("defaultDurationSeconds", Number(event.target.value))} /><small>必须属于上方允许范围</small></label></div>}
+        <div className={styles.formGrid}>
+          <label><strong>比例模式</strong><select value={aspectRatioMode} onChange={(event) => {
+            const nextMode = event.target.value;
+            if (nextMode === "unspecified") {
+              const next: JsonObject = { ...value, aspectRatioMode: nextMode };
+              delete next.defaultAspectRatio;
+              onChange(next);
+              return;
+            }
+            onChange({ ...value, aspectRatioMode: nextMode });
+          }}><option value="list">指定列表</option><option value="any">任意合法 W:H</option><option value="unspecified">上游未确认</option></select></label>
+          {aspectRatioMode !== "unspecified" && <label><strong>默认比例</strong><input value={String(value.defaultAspectRatio ?? "")} onChange={(event) => update("defaultAspectRatio", event.target.value)} placeholder="例如 16:9" /></label>}
+        </div>
+        {aspectRatioMode === "list" && <EditableCapabilityChoices label="支持比例" presets={["1:1", "3:4", "4:3", "9:16", "16:9", "21:9"]} selected={stringArray(value.supportedAspectRatios)} kind="aspectRatio" onChange={(next) => update("supportedAspectRatios", next)} />}
       </>}
       <div className={styles.formGrid}>
-        <label><strong>最少参考图</strong><input type="number" min={0} value={textValue(value.minReferenceImages ?? 0)} onChange={(event) => update("minReferenceImages", Number(event.target.value))} /></label>
-        <label><strong>最大参考图</strong><input type="number" min={0} value={textValue(value.maxReferenceImages ?? 0)} onChange={(event) => update("maxReferenceImages", Number(event.target.value))} /></label>
-        {modality === "video" && <label><strong>最大参考视频</strong><input type="number" min={0} value={textValue(value.maxReferenceVideos ?? 0)} onChange={(event) => update("maxReferenceVideos", Number(event.target.value))} /></label>}
-        {modality === "video" && <label><strong>最大参考音频</strong><input type="number" min={0} value={textValue(value.maxReferenceAudios ?? 0)} onChange={(event) => update("maxReferenceAudios", Number(event.target.value))} /></label>}
-        <label><strong>最大输出数量</strong><input type="number" min={1} value={textValue(value.maxOutputs ?? 1)} onChange={(event) => update("maxOutputs", Number(event.target.value))} /></label>
+        <label><strong>最少参考图</strong><input type="number" min={0} max={32} value={textValue(value.minReferenceImages ?? 0)} onChange={(event) => update("minReferenceImages", Number(event.target.value))} /></label>
+        <label><strong>最大参考图</strong><input type="number" min={0} max={32} value={textValue(value.maxReferenceImages ?? 0)} onChange={(event) => update("maxReferenceImages", Number(event.target.value))} /></label>
+        {modality === "video" && <label><strong>最大参考视频</strong><input type="number" min={0} max={8} value={textValue(value.maxReferenceVideos ?? 0)} onChange={(event) => update("maxReferenceVideos", Number(event.target.value))} /></label>}
+        {modality === "video" && <label><strong>最少参考视频</strong><input type="number" min={0} max={8} value={textValue(value.minReferenceVideos ?? 0)} onChange={(event) => update("minReferenceVideos", Number(event.target.value))} /></label>}
+        {modality === "video" && <label><strong>最大参考音频</strong><input type="number" min={0} max={8} value={textValue(value.maxReferenceAudios ?? 0)} onChange={(event) => update("maxReferenceAudios", Number(event.target.value))} /></label>}
+        {modality === "video" && <label><strong>最少参考音频</strong><input type="number" min={0} max={8} value={textValue(value.minReferenceAudios ?? 0)} onChange={(event) => update("minReferenceAudios", Number(event.target.value))} /></label>}
+        <label><strong>最大输出数量</strong><input type="number" min={1} max={16} value={textValue(value.maxOutputs ?? 1)} onChange={(event) => update("maxOutputs", Number(event.target.value))} /></label>
       </div>
       <div className={styles.switchGrid}>
-        <SwitchField label="支持参考图" hint="允许上传图片作为输入" checked={Boolean(value.supportsReferenceImage)} onChange={(next) => update("supportsReferenceImage", next)} />
+        <SwitchField label="支持参考图" hint="允许上传图片作为输入" checked={Boolean(value.supportsReferenceImage)} onChange={(next) => updateReferenceSupport("supportsReferenceImage", "minReferenceImages", "maxReferenceImages", next)} />
         {modality === "image" && <SwitchField label="透明背景" hint="允许输出透明 PNG" checked={Boolean(value.supportsTransparentBackground)} onChange={(next) => update("supportsTransparentBackground", next)} />}
         {modality === "video" && <SwitchField label="支持文字提示" hint="允许 text-to-video" checked={value.supportsTextPrompt !== false} onChange={(next) => update("supportsTextPrompt", next)} />}
-        {modality === "video" && <SwitchField label="支持参考视频" hint="允许视频参考输入" checked={Boolean(value.supportsReferenceVideo ?? value.supportsVideoReference)} onChange={(next) => update("supportsReferenceVideo", next)} />}
-        {modality === "video" && <SwitchField label="支持参考音频" hint="允许音频参考输入" checked={Boolean(value.supportsReferenceAudio ?? value.supportsAudioReference)} onChange={(next) => update("supportsReferenceAudio", next)} />}
+        {modality === "video" && <SwitchField label="支持参考视频" hint="允许视频参考输入" checked={Boolean(value.supportsReferenceVideo ?? value.supportsVideoReference)} onChange={(next) => updateReferenceSupport("supportsReferenceVideo", "minReferenceVideos", "maxReferenceVideos", next)} />}
+        {modality === "video" && <SwitchField label="支持参考音频" hint="允许音频参考输入" checked={Boolean(value.supportsReferenceAudio ?? value.supportsAudioReference)} onChange={(next) => updateReferenceSupport("supportsReferenceAudio", "minReferenceAudios", "maxReferenceAudios", next)} />}
         {modality === "video" && <SwitchField label="支持首帧" hint="允许单独提供首帧" checked={Boolean(value.supportsFirstFrame)} onChange={(next) => update("supportsFirstFrame", next)} />}
         {modality === "video" && <SwitchField label="支持尾帧" hint="允许单独提供尾帧" checked={Boolean(value.supportsLastFrame)} onChange={(next) => update("supportsLastFrame", next)} />}
         {modality === "video" && <SwitchField label="支持首尾帧" hint="允许首帧与尾帧控制" checked={Boolean(value.supportsFirstLastFrame)} onChange={(next) => update("supportsFirstLastFrame", next)} />}
@@ -796,12 +870,38 @@ const videoAdapterOptions = [
   ["OPENAI_COMPATIBLE_VIDEO", "OpenAI Compatible Video"],
 ] as const;
 
+const genericVideoAdapterConfigFor = (current: JsonObject | null): JsonObject => ({
+  submitEndpoint: "/v1/videos",
+  statusEndpointTemplate: "/v1/videos/{taskId}",
+  contentEndpointTemplate: "/v1/videos/{taskId}/content",
+  modelParameter: "model",
+  promptParameter: "prompt",
+  durationParameter: "seconds",
+  resolutionParameter: "none",
+  aspectRatioParameter: "none",
+  referenceSerialization: "array",
+  taskIdPath: "id",
+  statusPath: "status",
+  videoAvailablePath: "video_available",
+  assetStatePath: "asset_state",
+  pollAfterMsPath: "poll_after_ms",
+  processingStatuses: ["queued", "in_progress", "pending_confirmation"],
+  completedStatuses: ["completed"],
+  failedStatuses: ["failed"],
+  requiresVideoAvailable: true,
+  idempotencyHeader: "Idempotency-Key",
+  ...objectValue(current),
+});
+
 function VideoAdapterEditor({ value, onChange }: {
   value: RouteDraft;
   onChange: (next: RouteDraft) => void;
 }) {
-  const config = objectValue(value.adapterConfig);
-  const setConfig = (key: string, next: string) => onChange({
+  const isGeneric = value.adapterKey === "GENERIC_ASYNC_VIDEO";
+  const config = isGeneric
+    ? genericVideoAdapterConfigFor(value.adapterConfig)
+    : objectValue(value.adapterConfig);
+  const setConfig = (key: string, next: unknown) => onChange({
     ...value,
     adapterConfig: { ...config, [key]: next },
   });
@@ -812,17 +912,49 @@ function VideoAdapterEditor({ value, onChange }: {
         <select
           aria-label="视频调用适配器"
           value={value.adapterKey}
-          onChange={(event) => onChange({
-            ...value,
-            adapterKey: event.target.value,
-            adapterConfig: event.target.value ? config : null,
-          })}
+          onChange={(event) => {
+            const adapterKey = event.target.value;
+            onChange({
+              ...value,
+              adapterKey,
+              adapterConfig: adapterKey === "GENERIC_ASYNC_VIDEO"
+                ? genericVideoAdapterConfigFor(null)
+                : adapterKey ? objectValue(value.adapterConfig) : null,
+            });
+          }}
         >
           {videoAdapterOptions.map(([key, label]) => <option key={key || "legacy"} value={key}>{label}</option>)}
         </select>
         <small>适配器必须由 Route 显式指定；不会根据模型名称自动绑定。</small>
       </label>
-      {value.adapterKey && <div className={styles.formGrid}>
+      {isGeneric && <>
+        <div className={styles.formGrid}>
+          <label><strong>Submit Endpoint</strong><input value={String(config.submitEndpoint ?? "")} onChange={(event) => setConfig("submitEndpoint", event.target.value)} /></label>
+          <label><strong>Status Endpoint Template</strong><input value={String(config.statusEndpointTemplate ?? "")} onChange={(event) => setConfig("statusEndpointTemplate", event.target.value)} /></label>
+          <label><strong>Content Endpoint Template</strong><input value={String(config.contentEndpointTemplate ?? "")} onChange={(event) => setConfig("contentEndpointTemplate", event.target.value)} /></label>
+          <label><strong>Model Parameter</strong><input value={String(config.modelParameter ?? "model")} onChange={(event) => setConfig("modelParameter", event.target.value)} /></label>
+          <label><strong>Prompt Parameter</strong><input value={String(config.promptParameter ?? "prompt")} onChange={(event) => setConfig("promptParameter", event.target.value)} /></label>
+          <label><strong>Duration Parameter</strong><select value={String(config.durationParameter ?? "seconds")} onChange={(event) => setConfig("durationParameter", event.target.value)}><option value="none">不发送</option><option value="seconds">seconds</option><option value="duration">duration</option></select></label>
+          <label><strong>Resolution Parameter</strong><select value={String(config.resolutionParameter ?? "none")} onChange={(event) => setConfig("resolutionParameter", event.target.value)}><option value="none">不发送</option><option value="size">size</option><option value="resolution">resolution</option></select></label>
+          <label><strong>Aspect Ratio Parameter</strong><select value={String(config.aspectRatioParameter ?? "none")} onChange={(event) => setConfig("aspectRatioParameter", event.target.value)}><option value="none">不发送</option><option value="aspect_ratio">aspect_ratio</option><option value="ratio">ratio</option></select></label>
+          <label><strong>Reference Images Parameter</strong><input value={String(config.referenceImagesParameter ?? "")} onChange={(event) => setConfig("referenceImagesParameter", event.target.value)} placeholder="未配置时带图 Route 不可用" /></label>
+          <label><strong>Reference Videos Parameter</strong><input value={String(config.referenceVideosParameter ?? "")} onChange={(event) => setConfig("referenceVideosParameter", event.target.value)} placeholder="未配置时带视频 Route 不可用" /></label>
+          <label><strong>Reference Audios Parameter</strong><input value={String(config.referenceAudiosParameter ?? "")} onChange={(event) => setConfig("referenceAudiosParameter", event.target.value)} placeholder="未配置时带音频 Route 不可用" /></label>
+          <label><strong>Task ID Path</strong><input value={String(config.taskIdPath ?? "id")} onChange={(event) => setConfig("taskIdPath", event.target.value)} /></label>
+          <label><strong>Status Path</strong><input value={String(config.statusPath ?? "status")} onChange={(event) => setConfig("statusPath", event.target.value)} /></label>
+          <label><strong>Video Available Path</strong><input value={String(config.videoAvailablePath ?? "video_available")} onChange={(event) => setConfig("videoAvailablePath", event.target.value)} /></label>
+          <label><strong>Asset State Path</strong><input value={String(config.assetStatePath ?? "asset_state")} onChange={(event) => setConfig("assetStatePath", event.target.value)} /></label>
+          <label><strong>Poll After Path</strong><input value={String(config.pollAfterMsPath ?? "poll_after_ms")} onChange={(event) => setConfig("pollAfterMsPath", event.target.value)} /></label>
+          <label><strong>Idempotency Header</strong><input value={String(config.idempotencyHeader ?? "Idempotency-Key")} onChange={(event) => setConfig("idempotencyHeader", event.target.value)} /></label>
+          <label><strong>Processing Statuses</strong><input value={stringArray(config.processingStatuses).join(", ")} onChange={(event) => setConfig("processingStatuses", event.target.value.split(",").map((item) => item.trim()).filter(Boolean))} /></label>
+          <label><strong>Completed Statuses</strong><input value={stringArray(config.completedStatuses).join(", ")} onChange={(event) => setConfig("completedStatuses", event.target.value.split(",").map((item) => item.trim()).filter(Boolean))} /></label>
+          <label><strong>Failed Statuses</strong><input value={stringArray(config.failedStatuses).join(", ")} onChange={(event) => setConfig("failedStatuses", event.target.value.split(",").map((item) => item.trim()).filter(Boolean))} /></label>
+        </div>
+        <div className={styles.switchGrid}>
+          <SwitchField label="等待 Video Available" hint="completed 后仍等待素材可下载" checked={config.requiresVideoAvailable !== false} onChange={(next) => setConfig("requiresVideoAvailable", next)} />
+        </div>
+      </>}
+      {value.adapterKey && !isGeneric && <div className={styles.formGrid}>
         <label><strong>Generation Endpoint</strong><input value={String(config.generationEndpoint ?? "")} onChange={(event) => setConfig("generationEndpoint", event.target.value)} placeholder="例如 /v1/video/generations" /></label>
         <label><strong>Status Endpoint</strong><input value={String(config.statusEndpoint ?? "")} onChange={(event) => setConfig("statusEndpoint", event.target.value)} placeholder="例如 /v1/video/tasks/{id}" /></label>
       </div>}
