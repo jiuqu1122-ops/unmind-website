@@ -17,6 +17,10 @@ import {
   parseJsonObject,
   priceDiffRows,
   priceSummary,
+  validateAdapterConfigDraft,
+  validateCapabilitiesDraft,
+  validateCostProfileDraft,
+  validatePricingDraft,
 } from "../app/admin/ai-model-center-model.ts";
 
 test("summarizes canonical image, chat, and video prices", () => {
@@ -123,6 +127,10 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /body: JSON\.stringify\(draft\)/);
   assert.match(source, /modalityOverride/);
   assert.match(source, /系统不会自动迁移；请先解除映射/);
+  assert.match(source, /validateCapabilitiesDraft\(capabilities\)/);
+  assert.match(source, /validateCostProfileDraft\(costProfile\)/);
+  assert.match(source, /validateAdapterConfigDraft\(adapterConfig\)/);
+  assert.doesNotMatch(source, /validateNumericTree/);
   assert.doesNotMatch(source, /canonicalModelKey: target, expectedUpdatedAt: discovery\.updatedAt/);
   assert.doesNotMatch(source, /\.\.\.draft, expectedUpdatedAt: discovery\.updatedAt/);
   assert.match(source, /该上游模型名与手动维护的兼容名称冲突/);
@@ -198,4 +206,69 @@ test("prefers a manual discovery modality override", () => {
     modalityOverride: null,
     suggestedModality: "video",
   }), "video");
+});
+
+test("validates structured range and fixed video capabilities without parsing mode strings as numbers", () => {
+  assert.doesNotThrow(() => validateCapabilitiesDraft({
+    durationMode: "range",
+    durationRange: { min: 4, max: 15, step: 1 },
+    defaultDurationSeconds: 5,
+    supportedResolutions: ["720p"],
+    aspectRatioMode: "list",
+    supportedAspectRatios: ["16:9", "9:16"],
+    minReferenceImages: 0,
+    maxReferenceImages: 9,
+    minReferenceVideos: 0,
+    maxReferenceVideos: 3,
+    minReferenceAudios: 0,
+    maxReferenceAudios: 3,
+  }));
+  assert.doesNotThrow(() => validateCapabilitiesDraft({
+    durationMode: "fixed",
+    supportedDurations: [30],
+    defaultDurationSeconds: 30,
+    aspectRatioMode: "unspecified",
+  }));
+});
+
+test("rejects invalid duration ranges and reference bounds", () => {
+  assert.throws(() => validateCapabilitiesDraft({
+    durationMode: "range",
+    durationRange: { min: 15, max: 4, step: 1 },
+  }), /min/);
+  assert.throws(() => validateCapabilitiesDraft({
+    durationMode: "range",
+    durationRange: { min: 4, max: 15, step: 0 },
+  }), /step/);
+  assert.throws(() => validateCapabilitiesDraft({
+    minReferenceImages: 10,
+    maxReferenceImages: 9,
+  }), /minReferenceImages/);
+});
+
+test("keeps pricing, cost, and adapter validation schema-specific", () => {
+  assert.doesNotThrow(() => validatePricingDraft({
+    billingType: "video_duration",
+    creditsPerSecond: "12.5",
+    creditsByDuration: { "5": "60", "10": 110 },
+    durationMode: "range",
+  }));
+  assert.doesNotThrow(() => validateCostProfileDraft({
+    currency: "CNY",
+    cnyPerSecond: "0.25",
+    standard: { upstreamInputCnyPer1m: 2.5 },
+  }));
+  assert.doesNotThrow(() => validateAdapterConfigDraft({
+    durationParameter: "seconds",
+    resolutionParameter: "none",
+    aspectRatioParameter: "none",
+    referenceSerialization: "array",
+    taskIdPath: "data.id",
+    statusPath: "data.status",
+    videoAvailablePath: "data.video_available",
+    assetStatePath: "data.asset_state",
+    pollAfterMsPath: "data.poll_after_ms",
+  }));
+  assert.throws(() => validatePricingDraft({ creditsPerSecond: "NaN" }), /NaN/);
+  assert.throws(() => validateCostProfileDraft({ currency: "POINTS" }), /USD/);
 });

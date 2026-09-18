@@ -139,6 +139,267 @@ export function normalizeCapabilityOptions(values: string[], kind: CapabilityOpt
   return Array.from(new Set(values.map(value => normalizeCapabilityOption(value, kind))));
 }
 
+type NumericRules = {
+  integer?: boolean;
+  min?: number;
+  max?: number;
+  rejectUnsupportedPrice?: boolean;
+};
+
+const validatedNumber = (value: unknown, label: string, rules: NumericRules = {}) => {
+  if ((typeof value !== "number" && typeof value !== "string")
+    || (typeof value === "string" && !value.trim())) {
+    throw new Error(`${label}必须是数字`);
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) throw new Error(`${label}不能是 NaN 或无限值`);
+  if (rules.integer && !Number.isSafeInteger(numeric)) throw new Error(`${label}必须是整数`);
+  if (rules.min !== undefined && numeric < rules.min) throw new Error(`${label}不能小于 ${rules.min}`);
+  if (rules.max !== undefined && numeric > rules.max) throw new Error(`${label}不能大于 ${rules.max}`);
+  if (rules.rejectUnsupportedPrice && numeric >= 99_999) {
+    throw new Error("价格异常，请确认；不支持的规格请留空");
+  }
+  return numeric;
+};
+
+const numericObjectValues = (
+  value: unknown,
+  label: string,
+  rules: NumericRules,
+) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label}必须是对象`);
+  }
+  const visit = (item: unknown, path: string) => {
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      Object.entries(item as JsonObject).forEach(([key, child]) => visit(child, `${path}.${key}`));
+      return;
+    }
+    validatedNumber(item, path, rules);
+  };
+  Object.entries(value as JsonObject).forEach(([key, item]) => visit(item, `${label}.${key}`));
+};
+
+const optionalPositiveDuration = (value: unknown, label: string) => (
+  value === undefined
+    ? undefined
+    : validatedNumber(value, label, { integer: true, min: 1, max: 600 })
+);
+
+export function validateCapabilitiesDraft(capabilities: JsonObject) {
+  const durationModeValue = capabilities.durationMode;
+  const durationMode = durationModeValue === undefined ? undefined : String(durationModeValue);
+  if (durationMode !== undefined && !["list", "range", "fixed"].includes(durationMode)) {
+    throw new Error("durationMode 必须是 list、range 或 fixed");
+  }
+  const supportedDurationsValue = capabilities.supportedDurations;
+  if (supportedDurationsValue !== undefined && !Array.isArray(supportedDurationsValue)) {
+    throw new Error("supportedDurations 必须是数组");
+  }
+  const supportedDurations = Array.isArray(supportedDurationsValue)
+    ? supportedDurationsValue.map((value, index) => validatedNumber(
+      value,
+      `supportedDurations[${index}]`,
+      { integer: true, min: 1, max: 600 },
+    ))
+    : [];
+  const defaultDuration = optionalPositiveDuration(
+    capabilities.defaultDurationSeconds,
+    "defaultDurationSeconds",
+  );
+  const rangeValue = capabilities.durationRange;
+  let durationRange: { min: number; max: number; step: number } | undefined;
+  if (rangeValue !== undefined) {
+    if (!rangeValue || typeof rangeValue !== "object" || Array.isArray(rangeValue)) {
+      throw new Error("durationRange 必须是对象");
+    }
+    const range = rangeValue as JsonObject;
+    const min = validatedNumber(range.min, "durationRange.min", { integer: true, min: 1, max: 600 });
+    const max = validatedNumber(range.max, "durationRange.max", { integer: true, min: 1, max: 600 });
+    const step = validatedNumber(range.step, "durationRange.step", { integer: true, min: 1, max: 600 });
+    if (min > max) throw new Error("durationRange.min 不能大于 durationRange.max");
+    durationRange = { min, max, step };
+  }
+  if (durationMode === "list") {
+    if (!supportedDurations.length) throw new Error("list 时长模式至少需要一个 supportedDurations");
+    if (defaultDuration !== undefined && !supportedDurations.includes(defaultDuration)) {
+      throw new Error("defaultDurationSeconds 必须属于 supportedDurations");
+    }
+  }
+  if (durationMode === "range") {
+    if (!durationRange) throw new Error("range 时长模式必须配置 durationRange");
+    if (defaultDuration !== undefined
+      && (defaultDuration < durationRange.min
+        || defaultDuration > durationRange.max
+        || (defaultDuration - durationRange.min) % durationRange.step !== 0)) {
+      throw new Error("defaultDurationSeconds 必须落在 durationRange 的有效步长上");
+    }
+  }
+  if (durationMode === "fixed") {
+    const fixedDurations = new Set([
+      ...supportedDurations,
+      ...(defaultDuration === undefined ? [] : [defaultDuration]),
+    ]);
+    if (supportedDurations.length > 1 || fixedDurations.size !== 1) {
+      throw new Error("fixed 时长模式必须且只能配置一个固定时长");
+    }
+  }
+
+  const aspectRatioMode = capabilities.aspectRatioMode;
+  if (aspectRatioMode !== undefined && !["list", "any", "unspecified"].includes(String(aspectRatioMode))) {
+    throw new Error("aspectRatioMode 必须是 list、any 或 unspecified");
+  }
+
+  const referenceKinds = [
+    ["Images", "supportsReferenceImage", "supportsReferenceImages", 32],
+    ["Videos", "supportsReferenceVideo", "supportsVideoReference", 8],
+    ["Audios", "supportsReferenceAudio", "supportsAudioReference", 8],
+  ] as const;
+  for (const [suffix, supportKey, supportAlias, limit] of referenceKinds) {
+    const minKey = `minReference${suffix}`;
+    const maxKey = `maxReference${suffix}`;
+    const hasLimits = capabilities[minKey] !== undefined || capabilities[maxKey] !== undefined;
+    const hasSupport = capabilities[supportKey] !== undefined || capabilities[supportAlias] !== undefined;
+    if (!hasLimits && !hasSupport) continue;
+    const min = capabilities[minKey] === undefined
+      ? 0
+      : validatedNumber(capabilities[minKey], minKey, { integer: true, min: 0, max: limit });
+    const max = capabilities[maxKey] === undefined
+      ? 0
+      : validatedNumber(capabilities[maxKey], maxKey, { integer: true, min: 0, max: limit });
+    if (min > max) throw new Error(`${minKey} 不能大于 ${maxKey}`);
+    const supported = capabilities[supportKey] ?? capabilities[supportAlias];
+    if (supported === false && (min !== 0 || max !== 0)) {
+      throw new Error(`${supportKey} 关闭时参考数量必须为 0`);
+    }
+  }
+
+  if (capabilities.maxOutputs !== undefined) {
+    validatedNumber(capabilities.maxOutputs, "maxOutputs", { integer: true, min: 1, max: 16 });
+  }
+  if (capabilities.contextTiers !== undefined) {
+    if (!Array.isArray(capabilities.contextTiers)) throw new Error("contextTiers 必须是数组");
+    capabilities.contextTiers.forEach((tier, index) => {
+      if (!tier || typeof tier !== "object" || Array.isArray(tier)) {
+        throw new Error(`contextTiers[${index}] 必须是对象`);
+      }
+      const record = tier as JsonObject;
+      for (const key of ["minInputTokens", "maxInputTokens", "maxOutputTokens"]) {
+        if (record[key] !== undefined) {
+          validatedNumber(record[key], `contextTiers[${index}].${key}`, { integer: true, min: 1 });
+        }
+      }
+    });
+  }
+}
+
+const pricingNumericKeys = new Set([
+  "credits",
+  "creditsPerRequest",
+  "creditsPerImage",
+  "creditsPerSecond",
+  "creditsPerVideo",
+  "creditsPerExtraReferenceImage",
+  "creditsPerReferenceVideoSecond",
+  "inputCreditsPerMillion",
+  "outputCreditsPerMillion",
+  "cachedInputCreditsPerMillion",
+  "cacheWriteCreditsPerMillion",
+]);
+const pricingIntegerKeys = new Set(["includedReferenceImages"]);
+const pricingMapKeys = new Set([
+  "creditsPerImageByResolution",
+  "creditsByDuration",
+  "creditsByResolution",
+  "creditsByCount",
+  "creditsByInputMode",
+  "referenceVideoCreditsByResolution",
+]);
+
+export function validatePricingDraft(pricing: JsonObject) {
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) return value.forEach(visit);
+    if (!value || typeof value !== "object") return;
+    Object.entries(value as JsonObject).forEach(([key, item]) => {
+      if (pricingMapKeys.has(key)) {
+        numericObjectValues(item, key, { min: 0, rejectUnsupportedPrice: true });
+      } else if (pricingNumericKeys.has(key)) {
+        validatedNumber(item, key, { min: 0, rejectUnsupportedPrice: true });
+      } else if (pricingIntegerKeys.has(key)) {
+        validatedNumber(item, key, { integer: true, min: 0 });
+      } else {
+        visit(item);
+      }
+    });
+  };
+  visit(pricing);
+}
+
+const costNumericKeys = new Set([
+  "cnyPerSecond",
+  "cnyPerRequest",
+  "cnyPerImage",
+  "amountPerSecond",
+  "amountPerVideo",
+  "upstreamInputCnyPer1m",
+  "upstreamOutputCnyPer1m",
+  "upstreamCacheReadCnyPer1m",
+  "upstreamCacheWriteCnyPer1m",
+]);
+const costMapKeys = new Set(["cnyPerImageByResolution"]);
+
+export function validateCostProfileDraft(costProfile: JsonObject) {
+  if (costProfile.currency !== undefined && costProfile.currency !== "USD" && costProfile.currency !== "CNY") {
+    throw new Error("currency 必须是 USD 或 CNY");
+  }
+  const isCostNumericKey = (key: string) => costNumericKeys.has(key)
+    || /^cnyPer[A-Z0-9_]/.test(key)
+    || /^amountPer[A-Z0-9_]/.test(key)
+    || (/^upstream[A-Z0-9_]/.test(key) && /Cny(?:Per|$)/.test(key));
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) return value.forEach(visit);
+    if (!value || typeof value !== "object") return;
+    Object.entries(value as JsonObject).forEach(([key, item]) => {
+      if (costMapKeys.has(key)) numericObjectValues(item, key, { min: 0 });
+      else if (isCostNumericKey(key)) validatedNumber(item, key, { min: 0 });
+      else visit(item);
+    });
+  };
+  visit(costProfile);
+}
+
+export function validateAdapterConfigDraft(adapterConfig: JsonObject) {
+  const enumFields: Record<string, readonly string[]> = {
+    durationParameter: ["none", "seconds", "duration"],
+    resolutionParameter: ["none", "size", "resolution"],
+    aspectRatioParameter: ["none", "aspect_ratio", "ratio"],
+    referenceSerialization: ["array"],
+  };
+  Object.entries(enumFields).forEach(([key, allowed]) => {
+    const value = adapterConfig[key];
+    if (value !== undefined && (typeof value !== "string" || !allowed.includes(value))) {
+      throw new Error(`${key} 配置无效`);
+    }
+  });
+  const stringFields = [
+    "taskIdPath",
+    "statusPath",
+    "videoAvailablePath",
+    "assetStatePath",
+    "pollAfterMsPath",
+    "submitEndpoint",
+    "statusEndpointTemplate",
+    "contentEndpointTemplate",
+    "generationEndpoint",
+    "statusEndpoint",
+  ];
+  stringFields.forEach((key) => {
+    if (adapterConfig[key] !== undefined && typeof adapterConfig[key] !== "string") {
+      throw new Error(`${key} 必须是字符串`);
+    }
+  });
+}
+
 export type AdminAiUsageModelBindings = {
   items: AdminAiUsageModelBinding[];
   candidates: Record<AiUsageModelKey, Array<{

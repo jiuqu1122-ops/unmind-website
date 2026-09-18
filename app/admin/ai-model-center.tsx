@@ -20,6 +20,10 @@ import {
   normalizeCapabilityOptions,
   priceDiffRows,
   priceSummary,
+  validateAdapterConfigDraft,
+  validateCapabilitiesDraft,
+  validateCostProfileDraft,
+  validatePricingDraft,
   type AdminAiModelDetail,
   type AdminAiModelSummary,
   type AdminAiUsageModelBindings,
@@ -305,21 +309,9 @@ const withoutBlankValues = (value: unknown): unknown => {
   }));
 };
 
-const validateNumericTree = (value: unknown, price = false) => {
-  const visit = (item: unknown, key: string) => {
-    if (Array.isArray(item)) return item.forEach((entry) => visit(entry, key));
-    if (item && typeof item === "object") return Object.entries(item as JsonObject).forEach(([childKey, child]) => visit(child, childKey));
-    if (!/(credits|cny|tokens|images|videos|audios|duration|count)/i.test(key)) return;
-    const numeric = Number(item);
-    if (!Number.isFinite(numeric) || numeric < 0) throw new Error("数字字段不能为负数、NaN 或无限值");
-    if (price && /credits/i.test(key) && numeric >= 99_999) throw new Error("价格异常，请确认；不支持的规格请留空");
-  };
-  visit(value, "");
-};
-
 const normalizedPrice = (detail: AdminAiModelDetail, capabilities: JsonObject, pricing: JsonObject) => {
   const cleaned = withoutBlankValues({ ...pricing, billingType: detail.billingType }) as JsonObject;
-  validateNumericTree(cleaned, true);
+  validatePricingDraft(cleaned);
   if (detail.billingType === "token") {
     const standard = objectValue(cleaned.standard);
     const extended = objectValue(cleaned.extended);
@@ -1160,7 +1152,7 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
       return false;
     }
     try {
-      validateNumericTree(capabilities);
+      validateCapabilitiesDraft(capabilities);
     } catch (reason) {
       onError(reasonMessage(reason, "模型能力格式错误"));
       return false;
@@ -1231,8 +1223,9 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
     const adapterConfigChanged = detail?.modality !== "chat"
       && JSON.stringify(adapterConfig) !== JSON.stringify(route.adapterConfig ?? null);
     try {
-      validateNumericTree(costProfile);
-      if (capabilitiesOverride) validateNumericTree(capabilitiesOverride);
+      validateCostProfileDraft(costProfile);
+      if (capabilitiesOverride) validateCapabilitiesDraft(capabilitiesOverride);
+      if (adapterConfig) validateAdapterConfigDraft(adapterConfig);
     } catch (reason) {
       onError(reasonMessage(reason, "上游成本格式错误"));
       return false;
@@ -1371,7 +1364,7 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
       return;
     }
     try {
-      validateNumericTree(draft.capabilities);
+      validateCapabilitiesDraft(draft.capabilities);
     } catch (reason) {
       onError(reasonMessage(reason, "模型能力格式错误"));
       return;
