@@ -254,6 +254,9 @@
 .discoveryIdentity { min-width: 0; display: grid; gap: 3px; }
 .discoveryIdentity strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .discoveryIdentity small { color: #7f8ca0; font-size: 8px; }
+.discoveryModality { display: grid; gap: 3px; }
+.discoveryModality > span,.discoveryModality > small { color: #7f8ca0; font-size: 8px; }
+.discoveryModality > select { min-width: 72px; }
 .discoveryActions { display: grid; grid-template-columns: minmax(130px,1fr) auto auto auto; gap: 5px; }
 .createModelPanel { grid-column: 1 / -1; margin-top: 5px; padding: 16px; display: grid; gap: 13px; border: 1px solid #cad9f3; border-radius: 13px; background: #f7faff; }
 .createModelPanel > header,.createModelPanel > footer { display: flex; align-items: center; justify-content: space-between; gap: 15px; }

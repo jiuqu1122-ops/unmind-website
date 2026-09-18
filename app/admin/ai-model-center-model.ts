@@ -154,6 +154,8 @@ export type AiUpstreamDiscovery = {
   channelId: string;
   upstreamModelId: string;
   suggestedModality: AiModelModality | null;
+  modalityOverride: AiModelModality | null;
+  effectiveModality: AiModelModality | null;
   availability: string;
   capabilities: JsonObject | null;
   context: unknown;
@@ -171,6 +173,15 @@ export type AiUpstreamDiscovery = {
     status: string;
   };
 };
+
+export function effectiveDiscoveryModality(discovery: Pick<
+  AiUpstreamDiscovery,
+  "effectiveModality" | "modalityOverride" | "suggestedModality"
+>) {
+  return discovery.effectiveModality
+    ?? discovery.modalityOverride
+    ?? discovery.suggestedModality;
+}
 
 export const modalityLabel: Record<AiModelModality, string> = {
   chat: "Chat",

@@ -6,6 +6,7 @@ import {
   billingTypesByModality,
   canonicalKeyDraft,
   costSummary,
+  effectiveDiscoveryModality,
   formatJson,
   humanModelStatus,
   isModelCenterUnavailable,
@@ -56,7 +57,7 @@ type RouteDraft = {
 type CreateDraft = {
   canonicalModelKey: string;
   displayName: string;
-  modality: AiModelModality;
+  modality: AiModelModality | "";
   billingType: string;
   capabilities: JsonObject;
   visible: boolean;
@@ -422,15 +423,15 @@ const defaultCapabilities = (modality: AiModelModality): JsonObject => modality 
 };
 
 const createDraftFor = (discovery: AiUpstreamDiscovery): CreateDraft => {
-  const modality = discovery.suggestedModality ?? "chat";
+  const modality = effectiveDiscoveryModality(discovery) ?? "";
   return {
     canonicalModelKey: canonicalKeyDraft(discovery.upstreamModelId) || `model-${discovery.id.slice(-12)}`,
     displayName: discovery.upstreamModelId,
     modality,
-    billingType: billingTypesByModality[modality][0]!,
+    billingType: modality ? billingTypesByModality[modality][0]! : "",
     capabilities: Object.keys(discovery.capabilities ?? {}).length
       ? cloneObject(discovery.capabilities)
-      : defaultCapabilities(modality),
+      : modality ? defaultCapabilities(modality) : {},
     visible: false,
     enabled: false,
   };
@@ -1081,10 +1082,25 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
         IMAGE_ANALYSIS: usagePage.items.find((item) => item.key === "IMAGE_ANALYSIS")?.fixedCredits ?? "1",
         CANVAS_TEXT: usagePage.items.find((item) => item.key === "CANVAS_TEXT")?.fixedCredits ?? "1",
       });
-      setCreateDrafts((current) => Object.fromEntries(unmappedPage.items.map((item) => [item.id, current[item.id] ?? createDraftFor(item)])));
+      setCreateDrafts((current) => Object.fromEntries(unmappedPage.items.map((item) => {
+        const inferred = createDraftFor(item);
+        const existing = current[item.id];
+        return [item.id, existing?.modality === inferred.modality ? existing : {
+          ...inferred,
+          canonicalModelKey: existing?.canonicalModelKey ?? inferred.canonicalModelKey,
+          displayName: existing?.displayName ?? inferred.displayName,
+          visible: existing?.visible ?? inferred.visible,
+          enabled: existing?.enabled ?? inferred.enabled,
+        }];
+      })));
       setMappingTargets((current) => Object.fromEntries(unmappedPage.items.map((item) => {
-        const candidate = modelPage.items.find((model) => !item.suggestedModality || model.modality === item.suggestedModality);
-        return [item.id, current[item.id] ?? candidate?.canonicalModelKey ?? ""];
+        const modality = effectiveDiscoveryModality(item);
+        const currentModel = modelPage.items.find((model) => model.canonicalModelKey === current[item.id]);
+        const currentIsCompatible = currentModel && (!modality || currentModel.modality === modality);
+        const candidate = modality
+          ? modelPage.items.find((model) => model.modality === modality)
+          : undefined;
+        return [item.id, currentIsCompatible ? current[item.id]! : candidate?.canonicalModelKey ?? ""];
       })));
       const key = preferredKey && modelPage.items.some((item) => item.canonicalModelKey === preferredKey)
         ? preferredKey
@@ -1332,7 +1348,12 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
   const mapDiscovery = async (discovery: AiUpstreamDiscovery) => {
     const target = mappingTargets[discovery.id];
     const targetModel = models.find((model) => model.canonicalModelKey === target);
-    if (!target || !targetModel || (discovery.suggestedModality && targetModel.modality !== discovery.suggestedModality)) {
+    const modality = effectiveDiscoveryModality(discovery);
+    if (!modality) {
+      onError("请先为上游模型明确选择类型");
+      return;
+    }
+    if (!target || !targetModel || targetModel.modality !== modality) {
       onError("请选择相同类型的 Canonical 模型");
       return;
     }
@@ -1345,6 +1366,10 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
   const createCanonical = async (event: FormEvent, discovery: AiUpstreamDiscovery) => {
     event.preventDefault();
     const draft = createDrafts[discovery.id] ?? createDraftFor(discovery);
+    if (!draft.modality) {
+      onError("请先为上游模型明确选择类型");
+      return;
+    }
     try {
       validateNumericTree(draft.capabilities);
     } catch (reason) {
@@ -1382,6 +1407,48 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
       danger: true,
       action: async () => { await perform(() => request(`/v1/admin/ai-models/${encodeURIComponent(detail.canonicalModelKey)}/aliases/${encodeURIComponent(alias.id)}`, { method: "DELETE" }), "兼容名称已删除"); },
     });
+  };
+
+  const updateDiscoveryModality = async (
+    discovery: AiUpstreamDiscovery,
+    value: string,
+  ) => {
+    const modalityOverride = value ? value as AiModelModality : null;
+    setBusy(true);
+    try {
+      const updated = await request<AiUpstreamDiscovery>(
+        `/v1/admin/ai-models/unmapped/${encodeURIComponent(discovery.id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ modalityOverride }),
+        },
+      );
+      const nextDraft = createDraftFor(updated);
+      setUnmapped((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setCreateDrafts((current) => ({
+        ...current,
+        [updated.id]: {
+          ...nextDraft,
+          canonicalModelKey: current[updated.id]?.canonicalModelKey ?? nextDraft.canonicalModelKey,
+          displayName: current[updated.id]?.displayName ?? nextDraft.displayName,
+          visible: current[updated.id]?.visible ?? nextDraft.visible,
+          enabled: current[updated.id]?.enabled ?? nextDraft.enabled,
+        },
+      }));
+      const modality = effectiveDiscoveryModality(updated);
+      setMappingTargets((current) => {
+        const selected = models.find((model) => model.canonicalModelKey === current[updated.id]);
+        const next = selected && modality && selected.modality === modality
+          ? selected.canonicalModelKey
+          : modality ? models.find((model) => model.modality === modality)?.canonicalModelKey ?? "" : "";
+        return { ...current, [updated.id]: next };
+      });
+      onNotice(`${updated.upstreamModelId} 类型已更新`);
+    } catch (reason) {
+      onError(operationErrorMessage(reason, "模型类型更新失败"));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const saveUsageBinding = async (key: AiUsageModelKey) => {
@@ -1556,20 +1623,21 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
           <div className={styles.unmappedTable}>
             {filteredUnmapped.map((discovery) => {
               const draft = createDrafts[discovery.id] ?? createDraftFor(discovery);
-              const compatible = models.filter((model) => !discovery.suggestedModality || model.modality === discovery.suggestedModality);
+              const modality = effectiveDiscoveryModality(discovery);
+              const compatible = modality ? models.filter((model) => model.modality === modality) : [];
               return <article key={discovery.id}>
                 <div className={styles.discoveryIdentity}><strong>{discovery.upstreamModelId}</strong><small>{discovery.channel.name} · {discovery.provider}</small></div>
-                <span>{discovery.suggestedModality ? modalityLabel[discovery.suggestedModality] : "类型待确认"}</span>
+                <label className={styles.discoveryModality}><span>类型</span><select aria-label={`类型 ${discovery.upstreamModelId}`} disabled={busy} value={modality ?? ""} onChange={(event) => void updateDiscoveryModality(discovery, event.target.value)}><option value="">待确认</option><option value="chat">Chat</option><option value="image">图片</option><option value="video">视频</option></select>{discovery.modalityOverride && <small>人工覆盖</small>}</label>
                 <span>{discoveryCapabilitySummary(discovery)}</span>
                 <span>{costSummary(discovery.discoveredCost)}</span>
                 <span>{formatDateTime(discovery.lastSyncedAt)}</span>
-                <div className={styles.discoveryActions}><select aria-label={`映射 ${discovery.upstreamModelId}`} value={mappingTargets[discovery.id] ?? ""} onChange={(event) => setMappingTargets((current) => ({ ...current, [discovery.id]: event.target.value }))}><option value="">选择已有模型</option>{compatible.map((model) => <option key={model.id} value={model.canonicalModelKey}>{model.displayName}</option>)}</select><button type="button" disabled={busy || !mappingTargets[discovery.id]} onClick={() => void mapDiscovery(discovery)}>映射</button><button type="button" className={styles.ghost} onClick={() => setExpandedCreate(expandedCreate === discovery.id ? "" : discovery.id)}>创建新模型</button><button type="button" className={styles.textDanger} onClick={() => ignoreDiscovery(discovery)}>忽略</button></div>
+                <div className={styles.discoveryActions}><select aria-label={`映射 ${discovery.upstreamModelId}`} value={mappingTargets[discovery.id] ?? ""} onChange={(event) => setMappingTargets((current) => ({ ...current, [discovery.id]: event.target.value }))}><option value="">{modality ? "选择已有模型" : "请先选择类型"}</option>{compatible.map((model) => <option key={model.id} value={model.canonicalModelKey}>{model.displayName}</option>)}</select><button type="button" disabled={busy || !modality || !mappingTargets[discovery.id]} onClick={() => void mapDiscovery(discovery)}>映射</button><button type="button" className={styles.ghost} onClick={() => setExpandedCreate(expandedCreate === discovery.id ? "" : discovery.id)}>创建新模型</button><button type="button" className={styles.textDanger} onClick={() => ignoreDiscovery(discovery)}>忽略</button></div>
                 {expandedCreate === discovery.id && <form className={styles.createModelPanel} onSubmit={(event) => void createCanonical(event, discovery)}>
                   <header><div><strong>创建并映射新模型</strong><small>信息已根据上游检测结果预填</small></div><button type="button" className={styles.ghost} onClick={() => setExpandedCreate("")}>关闭</button></header>
-                  <div className={styles.formGrid}><label><strong>显示名称</strong><input required value={draft.displayName} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, displayName: event.target.value } }))} /></label><label><strong>客户端模型 ID</strong><input required value={draft.canonicalModelKey} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, canonicalModelKey: canonicalKeyDraft(event.target.value) } }))} /></label><label><strong>类型</strong><select value={draft.modality} onChange={(event) => { const modality = event.target.value as AiModelModality; setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, modality, billingType: billingTypesByModality[modality][0]!, capabilities: defaultCapabilities(modality) } })); }}>{(["chat", "image", "video"] as const).map((item) => <option key={item} value={item}>{modalityLabel[item]}</option>)}</select></label><label><strong>计费方式</strong><select value={draft.billingType} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, billingType: event.target.value } }))}>{billingTypesByModality[draft.modality].map((item) => <option key={item} value={item}>{item === "token" ? "按 Token" : item === "request" ? "按次" : item.includes("resolution") ? "按分辨率" : item.includes("second") ? "按秒" : "固定价格"}</option>)}</select></label></div>
+                  <div className={styles.formGrid}><label><strong>显示名称</strong><input required value={draft.displayName} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, displayName: event.target.value } }))} /></label><label><strong>客户端模型 ID</strong><input required value={draft.canonicalModelKey} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, canonicalModelKey: canonicalKeyDraft(event.target.value) } }))} /></label><label><strong>类型</strong><select value={draft.modality} disabled><option value="">请先在列表中选择</option>{(["chat", "image", "video"] as const).map((item) => <option key={item} value={item}>{modalityLabel[item]}</option>)}</select></label><label><strong>计费方式</strong><select disabled={!draft.modality} value={draft.billingType} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, billingType: event.target.value } }))}>{draft.modality && billingTypesByModality[draft.modality].map((item) => <option key={item} value={item}>{item === "token" ? "按 Token" : item === "request" ? "按次" : item.includes("resolution") ? "按分辨率" : item.includes("second") ? "按秒" : "固定价格"}</option>)}</select></label></div>
                   <div className={styles.switchGrid}><SwitchField label="用户可见" hint="创建后出现在客户端列表" checked={draft.visible} onChange={(visible) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, visible } }))} /><SwitchField label="允许调用" hint="服务器接受新请求" checked={draft.enabled} onChange={(enabled) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, enabled } }))} /></div>
-                  <CapabilitiesEditor modality={draft.modality} value={draft.capabilities} onChange={(next) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, capabilities: next } }))} compact />
-                  <footer><p>新 Route 会默认保持停用，确认成本与能力后再启用。</p><button disabled={busy}>{busy ? "正在创建…" : "创建并映射"}</button></footer>
+                  {draft.modality ? <CapabilitiesEditor modality={draft.modality} value={draft.capabilities} onChange={(next) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, capabilities: next } }))} compact /> : <p className={styles.inlineWarning}>请先在未映射列表中明确选择模型类型。</p>}
+                  <footer><p>新 Route 会默认保持停用，确认成本与能力后再启用。</p><button disabled={busy || !draft.modality}>{busy ? "正在创建…" : "创建并映射"}</button></footer>
                 </form>}
               </article>;
             })}
@@ -1625,8 +1693,12 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
                     adapterConfig: route.adapterConfig == null ? null : cloneObject(route.adapterConfig),
                   };
                   const isDefault = detail.defaultRouteId === route.id;
+                  const inferredModality = route.metadata?.inferredModality;
+                  const modalityMismatch = (inferredModality === "chat" || inferredModality === "image" || inferredModality === "video")
+                    && inferredModality !== detail.modality;
                   return <article key={route.id}>
                     <header><div><strong>{route.channel?.name ?? route.provider}</strong><small>上游模型：{route.upstreamModelId}</small></div><span data-ok={operationalRoute(route)}>● {routeState(route)}</span></header>
+                    {modalityMismatch && <div className={styles.inlineWarning}>同步识别该上游为{modalityLabel[inferredModality]}模型，但当前映射属于{modalityLabel[detail.modality]}模型。系统不会自动迁移；请先解除映射，再到未映射列表重新选择类型与 Canonical 模型。</div>}
                     <dl><div><dt>采购成本</dt><dd>{costSummary(route.costProfile)}</dd></div><div><dt>优先级</dt><dd>{route.priority}</dd></div><div><dt>默认渠道</dt><dd>{isDefault ? "是" : "否"}</dd></div><div><dt>最后同步</dt><dd>{formatDateTime(route.lastSyncedAt)}</dd></div></dl>
                     <details className={styles.routeCostEditor}>
                       <summary>编辑渠道成本与能力</summary>

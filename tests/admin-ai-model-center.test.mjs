@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   canonicalKeyDraft,
   costSummary,
+  effectiveDiscoveryModality,
   humanModelStatus,
   isModelCenterUnavailable,
   isUnsupportedPrice,
@@ -120,6 +121,8 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /USAGE_MODEL_NOT_AVAILABLE/);
   assert.match(source, /JSON\.stringify\(\{ canonicalModelKey: target \}\)/);
   assert.match(source, /body: JSON\.stringify\(draft\)/);
+  assert.match(source, /modalityOverride/);
+  assert.match(source, /系统不会自动迁移；请先解除映射/);
   assert.doesNotMatch(source, /canonicalModelKey: target, expectedUpdatedAt: discovery\.updatedAt/);
   assert.doesNotMatch(source, /\.\.\.draft, expectedUpdatedAt: discovery\.updatedAt/);
   assert.match(source, /该上游模型名与手动维护的兼容名称冲突/);
@@ -182,4 +185,17 @@ test("normalizes create keys, validates JSON objects, and filters modality", () 
   assert.equal(modelMatchesModality({ modality: "video" }, "image"), false);
   assert.equal(isModelCenterUnavailable(Object.assign(new Error("not found"), { status: 404 })), true);
   assert.equal(isModelCenterUnavailable(Object.assign(new Error("server error"), { status: 500 })), false);
+});
+
+test("prefers a manual discovery modality override", () => {
+  assert.equal(effectiveDiscoveryModality({
+    effectiveModality: "image",
+    modalityOverride: "image",
+    suggestedModality: "video",
+  }), "image");
+  assert.equal(effectiveDiscoveryModality({
+    effectiveModality: null,
+    modalityOverride: null,
+    suggestedModality: "video",
+  }), "video");
 });
