@@ -82,3 +82,16 @@ test("renders inspiration space and the web admin console", async () => {
   assert.match(admin, /管理员后台/);
   assert.match(admin, /管理员密钥/);
 });
+
+test("renders the remote recharge shell with route-scoped frame policy", async () => {
+  const [recharge, nginx] = await Promise.all([
+    readTopLevelRoute("recharge"),
+    readFile(new URL("../nginx.conf", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(recharge, /积分充值/);
+  assert.match(recharge, /安全充值会话/);
+  assert.match(nginx, /location \/recharge\//);
+  assert.match(nginx, /frame-ancestors tauri:\/\/localhost http:\/\/tauri\.localhost https:\/\/tauri\.localhost/);
+  assert.doesNotMatch(nginx.match(/location \/recharge\/[\s\S]*?\n    }/)?.[0] ?? "", /X-Frame-Options/);
+});

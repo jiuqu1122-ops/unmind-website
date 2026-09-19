@@ -1,0 +1,86 @@
+.page {
+  min-height: 100dvh;
+  background: #f6f7f4;
+  color: #1c1917;
+}
+
+.header {
+  min-height: 64px;
+  padding: 12px clamp(18px, 4vw, 48px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid rgba(120, 113, 108, .16);
+  background: rgba(255, 255, 255, .82);
+}
+
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand > div { display: grid; gap: 1px; }
+.brand strong { font-size: 13px; letter-spacing: .08em; }
+.brand span { color: #8b817b; font-size: 7px; font-weight: 800; letter-spacing: .16em; }
+.secure { color: #5f6f63; font-size: 10px; font-weight: 700; }
+
+.content {
+  width: min(880px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: clamp(34px, 7vh, 72px) 0;
+}
+
+.rechargeShell { display: grid; gap: 28px; }
+.intro { max-width: 640px; }
+.eyebrow { display: block; margin-bottom: 12px; color: #486b52; font-size: 9px; font-weight: 900; letter-spacing: .18em; }
+.intro h1 { margin-bottom: 12px; font-size: clamp(32px, 6vw, 54px); line-height: 1; letter-spacing: -.045em; }
+.intro p { margin: 0; color: #78716c; font-size: 13px; line-height: 1.8; }
+
+.accountPanel {
+  padding: clamp(20px, 4vw, 32px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  border: 1px solid rgba(120, 113, 108, .16);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(41, 37, 36, .07);
+}
+
+.accountPanel > div { min-width: 0; }
+.accountPanel span { display: block; margin-bottom: 8px; color: #a09791; font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+.accountPanel strong { display: block; overflow: hidden; color: #292524; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.accountPanel small { display: block; margin-top: 5px; overflow: hidden; color: #a8a29e; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.balance { flex: 0 0 auto; text-align: right; }
+.balance strong { font-size: clamp(26px, 5vw, 40px); line-height: 1; letter-spacing: -.04em; }
+
+.notice { padding: 20px 0; border-top: 1px solid rgba(120, 113, 108, .16); border-bottom: 1px solid rgba(120, 113, 108, .16); }
+.notice span { display: block; color: #292524; font-size: 12px; font-weight: 800; }
+.notice p { max-width: 620px; margin: 7px 0 0; color: #78716c; font-size: 11px; line-height: 1.8; }
+.footer { display: flex; justify-content: space-between; gap: 16px; color: #a8a29e; font-size: 9px; }
+
+.loading { animation: pulse 1.5s ease-in-out infinite; }
+.loadingTitle, .loadingLine, .loadingPanel { border-radius: 10px; background: #e7e5e4; }
+.loadingTitle { width: 180px; height: 42px; }
+.loadingLine { width: min(360px, 80%); height: 12px; margin-top: 18px; }
+.loadingPanel { height: 180px; margin-top: 40px; border-radius: 20px; background: #fff; }
+
+.statePanel { max-width: 440px; margin: 10vh auto 0; text-align: center; }
+.stateMark { width: 46px; height: 46px; margin: 0 auto 18px; display: grid; place-items: center; border-radius: 50%; background: #fef3c7; color: #92400e; font-weight: 900; }
+.statePanel h1 { margin-bottom: 10px; font-size: 22px; }
+.statePanel p { color: #78716c; font-size: 12px; line-height: 1.8; }
+.statePanel button { margin-top: 12px; padding: 10px 18px; border: 0; border-radius: 10px; background: #1c1917; color: #fff; cursor: pointer; font-size: 11px; font-weight: 800; }
+.statePanel button:hover { background: #44403c; }
+
+@keyframes pulse { 50% { opacity: .52; } }
+
+@media (max-width: 560px) {
+  .header { min-height: 58px; }
+  .secure { display: none; }
+  .content { width: min(100% - 24px, 880px); padding-top: 28px; }
+  .accountPanel { align-items: flex-start; flex-direction: column; }
+  .balance { text-align: left; }
+  .footer { flex-direction: column; gap: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading { animation: none; }
+}
