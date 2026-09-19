@@ -21,6 +21,10 @@ import {
   validateCapabilitiesDraft,
   validateCostProfileDraft,
   validatePricingDraft,
+  resolveVideoCostBillingType,
+  videoCostDraftForBillingType,
+  videoBillingTypeOptions,
+  videoPricingDraftForBillingType,
 } from "../app/admin/ai-model-center-model.ts";
 
 test("summarizes canonical image, chat, and video prices", () => {
@@ -39,6 +43,11 @@ test("summarizes canonical image, chat, and video prices", () => {
     billingType: "video_second",
     creditsPerSecond: "19",
   }), "19 点/秒");
+  assert.equal(priceSummary({
+    billingType: "video_flat",
+    creditsPerVideo: "15",
+    creditsPerSecond: "999",
+  }), "15 点/条");
 });
 
 test("keeps route cost and sell price separate when calculating margin", () => {
@@ -100,6 +109,15 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /发布新价格/);
   assert.match(source, /Capabilities JSON（只读）/);
   assert.match(source, /编辑渠道成本与能力/);
+  assert.match(source, /视频计费方式/);
+  assert.deepEqual(videoBillingTypeOptions.map((option) => option.label), [
+    "按条计费",
+    "按秒计费",
+    "按时长档位",
+    "按分辨率 × 秒",
+  ]);
+  assert.match(source, /成本计费方式/);
+  assert.match(source, /每条视频成本/);
   assert.match(source, /继承模型能力/);
   assert.match(source, /capabilitiesOverride,/);
   assert.match(source, /图片调用适配器/);
@@ -271,4 +289,47 @@ test("keeps pricing, cost, and adapter validation schema-specific", () => {
   }));
   assert.throws(() => validatePricingDraft({ creditsPerSecond: "NaN" }), /NaN/);
   assert.throws(() => validateCostProfileDraft({ currency: "POINTS" }), /USD/);
+});
+
+test("switches video sell-price drafts without retaining mutually exclusive base fields", () => {
+  const surcharge = {
+    includedReferenceImages: "2",
+    creditsPerExtraReferenceImage: "3",
+    creditsPerReferenceVideoSecond: "4",
+  };
+  const flat = videoPricingDraftForBillingType({
+    billingType: "video_second",
+    credits: "15",
+    creditsPerSecond: "15",
+    creditsPerVideo: "90",
+    creditsByDuration: { "10": "80" },
+    creditsByResolution: { "2k": "9" },
+    ...surcharge,
+  }, "video_flat");
+  assert.deepEqual(flat, {
+    billingType: "video_flat",
+    creditsPerVideo: "90",
+    ...surcharge,
+  });
+  const second = videoPricingDraftForBillingType(flat, "video_second");
+  assert.deepEqual(second, { billingType: "video_second", ...surcharge });
+});
+
+test("normalizes video route costs to an explicit per-video or per-second mode", () => {
+  assert.equal(resolveVideoCostBillingType({ cnyPerRequest: "3" }), "video_flat");
+  assert.equal(resolveVideoCostBillingType({ cnyPerSecond: "0.06" }), "video_second");
+  assert.deepEqual(videoCostDraftForBillingType({
+    currency: "USD",
+    cnyPerRequest: "3",
+    cnyPerSecond: "0.06",
+  }, "video_flat"), {
+    currency: "USD",
+    billingType: "video_flat",
+    amountPerVideo: "3",
+  });
+  assert.doesNotThrow(() => validateCostProfileDraft({
+    currency: "USD",
+    billingType: "video_second",
+    amountPerSecond: "0.06",
+  }));
 });

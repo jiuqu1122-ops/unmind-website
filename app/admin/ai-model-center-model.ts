@@ -4,6 +4,7 @@ export type AiModelModality = "chat" | "image" | "video";
 export type AiModelStatus = "DRAFT" | "PUBLISHED" | "RETIRED";
 export type AiRoutingMode = "LEGACY" | "MANAGED";
 export type AiPricingMode = "MANUAL" | "MARKUP";
+export type VideoBillingType = "video_flat" | "video_second" | "video_duration" | "video_resolution_duration";
 export type AiUsageModelKey = "IMAGE_ANALYSIS" | "CANVAS_TEXT";
 export type AiModelRoute = {
   id: string;
@@ -366,6 +367,17 @@ export function validateCostProfileDraft(costProfile: JsonObject) {
     });
   };
   visit(costProfile);
+  if (costProfile.billingType !== undefined) {
+    if (costProfile.billingType !== "video_flat" && costProfile.billingType !== "video_second") {
+      throw new Error("视频成本计费方式必须是 video_flat 或 video_second");
+    }
+    const amount = costProfile.billingType === "video_flat"
+      ? costProfile.amountPerVideo
+      : costProfile.amountPerSecond;
+    if (amount === undefined || amount === "") {
+      throw new Error(costProfile.billingType === "video_flat" ? "请填写每条视频成本" : "请填写每秒视频成本");
+    }
+  }
 }
 
 export function validateAdapterConfigDraft(adapterConfig: JsonObject) {
@@ -456,6 +468,67 @@ export const billingTypesByModality: Record<AiModelModality, string[]> = {
   video: ["video_second", "video_flat", "video_duration", "video_resolution_duration"],
 };
 
+export const videoBillingTypeOptions: Array<{ value: VideoBillingType; label: string }> = [
+  { value: "video_flat", label: "按条计费" },
+  { value: "video_second", label: "按秒计费" },
+  { value: "video_duration", label: "按时长档位" },
+  { value: "video_resolution_duration", label: "按分辨率 × 秒" },
+];
+
+const videoBasePriceKeys = new Set([
+  "credits",
+  "creditsPerSecond",
+  "creditsPerVideo",
+  "creditsByDuration",
+  "creditsByResolution",
+  "creditsByCount",
+  "creditsByInputMode",
+]);
+
+export function videoPricingDraftForBillingType(value: JsonObject, billingType: VideoBillingType) {
+  const next = Object.fromEntries(Object.entries(value).filter(([key]) => !videoBasePriceKeys.has(key))) as JsonObject;
+  next.billingType = billingType;
+  if (billingType === "video_flat" && value.creditsPerVideo !== undefined) {
+    next.creditsPerVideo = value.creditsPerVideo;
+  } else if (billingType === "video_second") {
+    const creditsPerSecond = value.creditsPerSecond
+      ?? (value.billingType === "video_second" ? value.credits : undefined);
+    if (creditsPerSecond !== undefined) next.creditsPerSecond = creditsPerSecond;
+  } else if (billingType === "video_duration") {
+    if (value.creditsByDuration !== undefined) next.creditsByDuration = value.creditsByDuration;
+    if (value.creditsPerSecond !== undefined) next.creditsPerSecond = value.creditsPerSecond;
+  } else if (billingType === "video_resolution_duration" && value.creditsByResolution !== undefined) {
+    next.creditsByResolution = value.creditsByResolution;
+  }
+  return next;
+}
+
+export function resolveVideoCostBillingType(value: JsonObject): "video_flat" | "video_second" {
+  if (value.billingType === "video_flat" || value.billingType === "video_second") return value.billingType;
+  if (value.amountPerVideo !== undefined || value.cnyPerRequest !== undefined) return "video_flat";
+  return "video_second";
+}
+
+export function videoCostDraftForBillingType(value: JsonObject, billingType: "video_flat" | "video_second") {
+  const next = Object.fromEntries(Object.entries(value).filter(([key]) => ![
+    "billingType",
+    "amountPerVideo",
+    "amountPerSecond",
+    "cnyPerRequest",
+    "cnyPerSecond",
+  ].includes(key))) as JsonObject;
+  next.currency = value.currency === "USD" ? "USD" : "CNY";
+  next.billingType = billingType;
+  if (billingType === "video_flat") {
+    const amount = value.amountPerVideo ?? value.cnyPerRequest;
+    if (amount !== undefined) next.amountPerVideo = amount;
+  } else {
+    const amount = value.amountPerSecond ?? value.cnyPerSecond;
+    if (amount !== undefined) next.amountPerSecond = amount;
+  }
+  return next;
+}
+
 const isObject = (value: unknown): value is JsonObject => (
   Boolean(value) && typeof value === "object" && !Array.isArray(value)
 );
@@ -543,6 +616,26 @@ export function priceSummary(pricing: JsonObject | null) {
     const output = firstNumber(standard, ["outputCreditsPerMillion"]);
     if (input !== null && output !== null) return `输入 ${compactNumber(input)} / 输出 ${compactNumber(output)} 点·1M`;
   }
+  if (billingType === "video_flat") {
+    const perVideo = firstNumber(pricing, ["creditsPerVideo"]);
+    return perVideo === null ? "按条价格未配置" : `${compactNumber(perVideo)} 点/条`;
+  }
+  if (billingType === "video_second") {
+    const perSecond = firstNumber(pricing, ["creditsPerSecond", "credits"]);
+    return perSecond === null ? "按秒价格未配置" : `${compactNumber(perSecond)} 点/秒`;
+  }
+  if (billingType === "video_duration") {
+    const durations = resolutionEntries(pricing.creditsByDuration);
+    if (durations.length) return durations.map(([key, value]) => `${key}秒 ${compactNumber(value)} 点/条`).join(" · ");
+    const fallback = firstNumber(pricing, ["creditsPerSecond"]);
+    return fallback === null ? "时长价格未配置" : `备用 ${compactNumber(fallback)} 点/秒`;
+  }
+  if (billingType === "video_resolution_duration") {
+    const videoResolutions = resolutionEntries(pricing.creditsByResolution);
+    return videoResolutions.length
+      ? videoResolutions.map(([key, value]) => `${key.toUpperCase()} ${compactNumber(value)} 点/秒`).join(" · ")
+      : "分辨率价格未配置";
+  }
   const perRequest = firstNumber(pricing, ["creditsPerRequest"]);
   if (perRequest !== null) return isUnsupportedPrice(perRequest) ? "不支持" : `${compactNumber(perRequest)} 点/次`;
   const perImage = firstNumber(pricing, ["creditsPerImage"]);
@@ -554,6 +647,19 @@ export function priceSummary(pricing: JsonObject | null) {
 
 export function costSummary(cost: JsonObject | null) {
   if (!cost) return "成本未同步";
+  const currency = cost.currency === "USD" ? "USD" : "CNY";
+  const symbol = currency === "USD" ? "$" : "¥";
+  const videoBillingType = cost.billingType === "video_flat" || cost.billingType === "video_second"
+    ? cost.billingType
+    : null;
+  if (videoBillingType === "video_flat") {
+    const perVideo = firstNumber(cost, ["amountPerVideo", "cnyPerRequest"]);
+    return perVideo === null ? "按条成本未配置" : `${symbol}${compactNumber(perVideo)}/条`;
+  }
+  if (videoBillingType === "video_second") {
+    const perSecond = firstNumber(cost, ["amountPerSecond", "cnyPerSecond"]);
+    return perSecond === null ? "按秒成本未配置" : `${symbol}${compactNumber(perSecond)}/秒`;
+  }
   const resolutions = resolutionEntries(cost.cnyPerImageByResolution);
   if (resolutions.length) {
     return resolutions.map(([key, value]) => `${key.toUpperCase()} ¥${compactNumber(value)}`).join(" · ");
@@ -571,6 +677,20 @@ export function costSummary(cost: JsonObject | null) {
 
 function representativePair(pricing: JsonObject | null, cost: JsonObject | null) {
   if (!pricing || !cost) return null;
+  if (cost.currency === "USD") return null;
+  const billingType = String(pricing.billingType || "");
+  if (billingType === "video_flat") {
+    const sellPoints = firstNumber(pricing, ["creditsPerVideo"]);
+    const costCny = firstNumber(cost, ["amountPerVideo", "cnyPerRequest"]);
+    const costMode = resolveVideoCostBillingType(cost);
+    return costMode === "video_flat" && sellPoints !== null && costCny !== null ? { sellPoints, costCny } : null;
+  }
+  if (billingType === "video_second") {
+    const sellPoints = firstNumber(pricing, ["creditsPerSecond", "credits"]);
+    const costCny = firstNumber(cost, ["amountPerSecond", "cnyPerSecond"]);
+    const costMode = resolveVideoCostBillingType(cost);
+    return costMode === "video_second" && sellPoints !== null && costCny !== null ? { sellPoints, costCny } : null;
+  }
   const priceResolutions = new Map(resolutionEntries(pricing.creditsPerImageByResolution));
   const costResolutions = new Map(resolutionEntries(cost.cnyPerImageByResolution));
   for (const resolution of ["2k", "1k", "4k", "768p", "1080p"]) {
@@ -643,13 +763,19 @@ const pricingValueRows = (pricing: JsonObject | null) => {
   }
   add("request", "每次请求", "积分 / 次", pricing.creditsPerRequest);
   add("image", "每张图片", "积分 / 张", pricing.creditsPerImage);
-  add("video.second", "基础价格", "积分 / 秒", pricing.creditsPerSecond ?? pricing.credits);
-  add("video.flat", "每段视频", "积分 / 段", pricing.creditsPerVideo);
-  for (const [duration, value] of resolutionEntries(pricing.creditsByDuration)) {
-    add(`duration.${duration}`, `${duration} 秒`, "积分", value);
-  }
-  for (const [resolution, value] of resolutionEntries(pricing.creditsByResolution)) {
-    add(`videoResolution.${resolution}`, resolution.toUpperCase(), "积分 / 秒", value);
+  if (billingType === "video_second") {
+    add("video.second", "每秒视频", "积分 / 秒", pricing.creditsPerSecond ?? pricing.credits);
+  } else if (billingType === "video_flat") {
+    add("video.flat", "每条视频", "积分 / 条", pricing.creditsPerVideo);
+  } else if (billingType === "video_duration") {
+    for (const [duration, value] of resolutionEntries(pricing.creditsByDuration)) {
+      add(`duration.${duration}`, `${duration} 秒`, "积分 / 条", value);
+    }
+    add("video.durationFallback", "备用每秒价格", "积分 / 秒", pricing.creditsPerSecond);
+  } else if (billingType === "video_resolution_duration") {
+    for (const [resolution, value] of resolutionEntries(pricing.creditsByResolution)) {
+      add(`videoResolution.${resolution}`, resolution.toUpperCase(), "积分 / 秒", value);
+    }
   }
   return rows;
 };
@@ -698,7 +824,7 @@ export function lowestRouteCost(routes: AiModelRoute[]) {
     const numeric = resolutions.find(([key]) => key.toLowerCase() === "2k")?.[1]
       ?? resolutions[0]?.[1]
       ?? firstNumber(standard, ["upstreamInputCnyPer1m"])
-      ?? firstNumber(cost, ["cnyPerSecond", "cnyPerRequest", "cnyPerImage"]);
+      ?? firstNumber(cost, ["amountPerSecond", "amountPerVideo", "cnyPerSecond", "cnyPerRequest", "cnyPerImage"]);
     return numeric === null || numeric === undefined ? [] : [{ route, numeric }];
   });
   return candidates.sort((left, right) => left.numeric - right.numeric)[0]?.route ?? null;

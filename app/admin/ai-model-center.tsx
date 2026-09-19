@@ -24,6 +24,10 @@ import {
   validateCapabilitiesDraft,
   validateCostProfileDraft,
   validatePricingDraft,
+  resolveVideoCostBillingType,
+  videoBillingTypeOptions,
+  videoCostDraftForBillingType,
+  videoPricingDraftForBillingType,
   type AdminAiModelDetail,
   type AdminAiModelSummary,
   type AdminAiUsageModelBindings,
@@ -33,6 +37,7 @@ import {
   type AiUpstreamDiscovery,
   type CapabilityOptionKind,
   type JsonObject,
+  type VideoBillingType,
 } from "./ai-model-center-model";
 import styles from "./admin.module.css";
 
@@ -232,7 +237,7 @@ const stripUnsupportedPriceValues = (value: unknown, key = ""): unknown => {
 const priceDraftFor = (detail: AdminAiModelDetail) => {
   const source = detail.pricing?.pendingPrice ?? detail.pricing?.currentVersion?.pricing ?? { billingType: detail.billingType };
   const next = cloneObject(stripUnsupportedPriceValues(source) as JsonObject);
-  next.billingType = detail.billingType;
+  next.billingType = String(next.billingType || detail.billingType);
   return next;
 };
 
@@ -310,9 +315,18 @@ const withoutBlankValues = (value: unknown): unknown => {
 };
 
 const normalizedPrice = (detail: AdminAiModelDetail, capabilities: JsonObject, pricing: JsonObject) => {
-  const cleaned = withoutBlankValues({ ...pricing, billingType: detail.billingType }) as JsonObject;
+  const selectedBillingType = detail.modality === "video"
+    ? String(pricing.billingType || detail.billingType)
+    : detail.billingType;
+  if (!billingTypesByModality[detail.modality].includes(selectedBillingType)) {
+    throw new Error("计费方式与模型类型不匹配");
+  }
+  const selectedPricing = detail.modality === "video"
+    ? videoPricingDraftForBillingType(pricing, selectedBillingType as VideoBillingType)
+    : { ...pricing, billingType: selectedBillingType };
+  const cleaned = withoutBlankValues(selectedPricing) as JsonObject;
   validatePricingDraft(cleaned);
-  if (detail.billingType === "token") {
+  if (selectedBillingType === "token") {
     const standard = objectValue(cleaned.standard);
     const extended = objectValue(cleaned.extended);
     const keys = ["inputCreditsPerMillion", "outputCreditsPerMillion", "cachedInputCreditsPerMillion", "cacheWriteCreditsPerMillion"];
@@ -320,7 +334,7 @@ const normalizedPrice = (detail: AdminAiModelDetail, capabilities: JsonObject, p
       throw new Error("请完整填写普通上下文和长上下文的四项价格");
     }
   }
-  if (detail.billingType === "image_resolution") {
+  if (selectedBillingType === "image_resolution") {
     const prices = objectValue(cleaned.creditsPerImageByResolution);
     const supported = stringArray(capabilities.supportedResolutions).map((item) => item.toLowerCase());
     const required = supported.length ? supported : ["2k", "4k"];
@@ -328,23 +342,22 @@ const normalizedPrice = (detail: AdminAiModelDetail, capabilities: JsonObject, p
       throw new Error(`请填写所有支持分辨率的图片售价：${required.map((item) => item.toUpperCase()).join("、")}`);
     }
   }
-  if (detail.billingType === "image_flat" && !textValue(cleaned.creditsPerRequest)) {
+  if (selectedBillingType === "image_flat" && !textValue(cleaned.creditsPerRequest)) {
     throw new Error("请填写每次图片请求售价");
   }
-  if (detail.billingType === "image_count" && !textValue(cleaned.creditsPerImage)) {
+  if (selectedBillingType === "image_count" && !textValue(cleaned.creditsPerImage)) {
     throw new Error("请填写每张图片售价");
   }
-  if (detail.billingType === "request" && !textValue(cleaned.creditsPerRequest)) throw new Error("请填写每次请求售价");
-  if (detail.billingType === "video_second") {
+  if (selectedBillingType === "request" && !textValue(cleaned.creditsPerRequest)) throw new Error("请填写每次请求售价");
+  if (selectedBillingType === "video_second") {
     const credits = cleaned.creditsPerSecond ?? cleaned.credits;
     if (!textValue(credits)) throw new Error("请填写每秒视频售价");
-    cleaned.credits = credits;
     cleaned.creditsPerSecond = credits;
   }
-  if (detail.billingType === "video_flat" && !textValue(cleaned.creditsPerVideo ?? cleaned.credits)) {
-    throw new Error("请填写每段视频售价");
+  if (selectedBillingType === "video_flat" && !textValue(cleaned.creditsPerVideo)) {
+    throw new Error("请填写每条视频售价");
   }
-  if (detail.billingType === "video_duration") {
+  if (selectedBillingType === "video_duration") {
     const durations = objectValue(cleaned.creditsByDuration);
     const supported = numberArray(capabilities.supportedDurations).map(String);
     if (!Object.keys(durations).length && !textValue(cleaned.creditsPerSecond)) {
@@ -360,7 +373,7 @@ const normalizedPrice = (detail: AdminAiModelDetail, capabilities: JsonObject, p
       )));
     }
   }
-  if (detail.billingType === "video_resolution_duration") {
+  if (selectedBillingType === "video_resolution_duration") {
     const prices = objectValue(cleaned.creditsByResolution);
     const supported = normalizeCapabilityOptions(stringArray(capabilities.supportedResolutions), "resolution");
     if (!supported.length) throw new Error("请先配置模型支持的分辨率");
@@ -707,10 +720,13 @@ function PricingEditor({ detail, capabilities, value, onChange }: {
   onChange: (next: JsonObject) => void;
 }) {
   const set = (path: string[], next: string) => onChange(setPath(value, path, next));
-  if (detail.billingType === "request") {
+  const billingType = detail.modality === "video"
+    ? String(value.billingType || detail.billingType)
+    : detail.billingType;
+  if (billingType === "request") {
     return <div className={styles.priceForm}><NumericInput label="每次请求" unit="积分 / 次" value={value.creditsPerRequest} onChange={(next) => set(["creditsPerRequest"], next)} /></div>;
   }
-  if (detail.billingType === "token") {
+  if (billingType === "token") {
     const rateFields = [
       ["inputCreditsPerMillion", "输入"],
       ["outputCreditsPerMillion", "输出"],
@@ -727,10 +743,10 @@ function PricingEditor({ detail, capabilities, value, onChange }: {
   }
   if (detail.modality === "image") {
     const prices = objectValue(value.creditsPerImageByResolution);
-    if (detail.billingType === "image_flat") {
+    if (billingType === "image_flat") {
       return <div className={styles.priceForm}><NumericInput label="每次图片请求" unit="积分 / 次" value={value.creditsPerRequest} onChange={(next) => set(["creditsPerRequest"], next)} /></div>;
     }
-    if (detail.billingType === "image_count") {
+    if (billingType === "image_count") {
       return <div className={styles.priceForm}><NumericInput label="每张图片" unit="积分 / 张" value={value.creditsPerImage} onChange={(next) => set(["creditsPerImage"], next)} /></div>;
     }
     const supported = stringArray(capabilities.supportedResolutions).map((item) => item.toLowerCase());
@@ -755,6 +771,18 @@ function PricingEditor({ detail, capabilities, value, onChange }: {
     numberArray(capabilities.supportedDurations).map(String),
     "duration",
   );
+  const durationRange = objectValue(capabilities.durationRange);
+  const rangeMin = Number(durationRange.min);
+  const rangeMax = Number(durationRange.max);
+  const rangeStep = Math.max(1, Number(durationRange.step) || 1);
+  const rangeCount = Number.isFinite(rangeMin) && Number.isFinite(rangeMax)
+    ? Math.floor((rangeMax - rangeMin) / rangeStep) + 1
+    : 0;
+  const selectedRangeDurations = billingType === "video_duration"
+    && rangeCount > 0
+    && rangeCount <= 60
+    ? Array.from({ length: rangeCount }, (_, index) => String(rangeMin + index * rangeStep))
+    : [];
   // Pricing never grants a capability. Existing price keys are used only for
   // pre-capability legacy records; once server capabilities exist, they win.
   const effectiveVideoResolutions = capabilityResolutions.length
@@ -762,17 +790,33 @@ function PricingEditor({ detail, capabilities, value, onChange }: {
     : Object.keys(resolutionPrices).map((item) => item.toLowerCase());
   const effectiveDurations = capabilityDurations.length
     ? capabilityDurations
-    : Object.keys(durationPrices);
+    : selectedRangeDurations.length ? selectedRangeDurations : Object.keys(durationPrices);
   return (
     <div className={styles.priceForm}>
+      <label>
+        <strong>视频计费方式</strong>
+        <select
+          aria-label="视频计费方式"
+          value={billingType}
+          onChange={(event) => onChange(videoPricingDraftForBillingType(
+            value,
+            event.target.value as VideoBillingType,
+          ))}
+        >
+          {videoBillingTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+        <small>修改只保存到待发布价格；发布前不会影响当前线上计费。</small>
+      </label>
       <div className={styles.priceFieldGrid}>
-        <NumericInput label={detail.billingType === "video_duration" || detail.billingType === "video_resolution_duration" ? "备用每秒价格" : "基础价格"} unit={detail.billingType === "video_flat" ? "积分 / 段" : "积分 / 秒"} value={detail.billingType === "video_flat" ? value.creditsPerVideo : value.creditsPerSecond ?? value.credits} onChange={(next) => set([detail.billingType === "video_flat" ? "creditsPerVideo" : "creditsPerSecond"], next)} />
+        {billingType === "video_flat" && <NumericInput label="每条视频" unit="积分 / 条" value={value.creditsPerVideo} onChange={(next) => set(["creditsPerVideo"], next)} />}
+        {billingType === "video_second" && <NumericInput label="每秒" unit="积分 / 秒" value={value.creditsPerSecond ?? value.credits} onChange={(next) => set(["creditsPerSecond"], next)} />}
+        {billingType === "video_duration" && <NumericInput label="备用每秒价格" unit="积分 / 秒" value={value.creditsPerSecond} onChange={(next) => set(["creditsPerSecond"], next)} />}
         <NumericInput label="免费参考图" unit="张" value={value.includedReferenceImages} onChange={(next) => set(["includedReferenceImages"], next)} />
         <NumericInput label="额外参考图" unit="积分 / 张" value={value.creditsPerExtraReferenceImage} onChange={(next) => set(["creditsPerExtraReferenceImage"], next)} />
         <NumericInput label="参考视频" unit="积分 / 秒" value={value.creditsPerReferenceVideoSecond} onChange={(next) => set(["creditsPerReferenceVideoSecond"], next)} />
       </div>
-      {(detail.billingType === "video_resolution_duration" || Object.keys(resolutionPrices).length > 0) && <section><header><strong>分辨率价格</strong><span>按服务端支持规格显示</span></header><div className={styles.priceFieldGrid}>{effectiveVideoResolutions.map((item) => <NumericInput key={item} label={item.toUpperCase()} unit="积分 / 秒" value={resolutionPrices[item]} onChange={(next) => set(["creditsByResolution", item], next)} />)}</div></section>}
-      {(detail.billingType === "video_duration" || detail.billingType === "video_resolution_duration" || Object.keys(durationPrices).length > 0) && <section><header><strong>时长价格</strong><span>按完整视频计价</span></header><div className={styles.priceFieldGrid}>{effectiveDurations.map((item) => <NumericInput key={item} label={`${item} 秒`} unit="积分" value={durationPrices[item]} onChange={(next) => set(["creditsByDuration", item], next)} />)}</div></section>}
+      {billingType === "video_resolution_duration" && <section><header><strong>分辨率价格</strong><span>所填数值为每秒积分</span></header><div className={styles.priceFieldGrid}>{effectiveVideoResolutions.map((item) => <NumericInput key={item} label={item.toUpperCase()} unit="积分 / 秒" value={resolutionPrices[item]} onChange={(next) => set(["creditsByResolution", item], next)} />)}</div></section>}
+      {billingType === "video_duration" && <section><header><strong>时长档位价格</strong><span>按完整视频计价</span></header><div className={styles.priceFieldGrid}>{effectiveDurations.map((item) => <NumericInput key={item} label={`${item} 秒`} unit="积分 / 条" value={durationPrices[item]} onChange={(next) => set(["creditsByDuration", item], next)} />)}</div></section>}
       {Object.keys(referenceVideoPrices).length > 0 && <section><header><strong>参考视频分辨率价格</strong><span>可选附加价格</span></header><div className={styles.priceFieldGrid}>{effectiveVideoResolutions.map((item) => <NumericInput key={item} label={item.toUpperCase()} unit="积分 / 秒" value={referenceVideoPrices[item]} onChange={(next) => set(["referenceVideoCreditsByResolution", item], next)} />)}</div></section>}
     </div>
   );
@@ -796,7 +840,21 @@ function CostEditor({ modality, value, onChange }: {
     const prices = objectValue(value.cnyPerImageByResolution);
     return <div className={styles.costForm}><div className={styles.priceFieldGrid}>{["1k", "2k", "4k"].map((item) => <NumericInput key={item} label={item.toUpperCase()} unit="元 / 张" value={prices[item]} onChange={(next) => set(["cnyPerImageByResolution", item], next)} />)}</div></div>;
   }
-  return <div className={styles.costForm}><div className={styles.priceFieldGrid}><NumericInput label="每秒成本" unit="元 / 秒" value={value.cnyPerSecond} onChange={(next) => set(["cnyPerSecond"], next)} /><NumericInput label="每段成本" unit="元 / 段" value={value.cnyPerRequest} onChange={(next) => set(["cnyPerRequest"], next)} /></div></div>;
+  const billingType = resolveVideoCostBillingType(value);
+  const normalized = videoCostDraftForBillingType(value, billingType);
+  const currency = normalized.currency === "USD" ? "USD" : "CNY";
+  const currencyUnit = currency === "USD" ? "$" : "¥";
+  return <div className={styles.costForm}>
+    <div className={styles.formGrid}>
+      <label><strong>成本币种</strong><select value={currency} onChange={(event) => onChange({ ...normalized, currency: event.target.value })}><option value="CNY">CNY</option><option value="USD">USD</option></select></label>
+      <label><strong>成本计费方式</strong><select value={billingType} onChange={(event) => onChange(videoCostDraftForBillingType(value, event.target.value as "video_flat" | "video_second"))}><option value="video_flat">按条</option><option value="video_second">按秒</option></select></label>
+    </div>
+    <div className={styles.priceFieldGrid}>
+      {billingType === "video_flat"
+        ? <NumericInput label="每条视频成本" unit={`${currencyUnit} / 条`} value={normalized.amountPerVideo} onChange={(next) => onChange(setPath(normalized, ["amountPerVideo"], next))} />
+        : <NumericInput label="每秒视频成本" unit={`${currencyUnit} / 秒`} value={normalized.amountPerSecond} onChange={(next) => onChange(setPath(normalized, ["amountPerSecond"], next))} />}
+    </div>
+  </div>;
 }
 
 function ImageAdapterEditor({ value, onChange }: {
