@@ -6,6 +6,8 @@ import {
   costSummary,
   effectiveDiscoveryModality,
   humanModelStatus,
+  imageRouteExecutionMode,
+  imageTaskExecutionConfigFor,
   isModelCenterUnavailable,
   isUnsupportedPrice,
   lowestRouteCost,
@@ -20,6 +22,7 @@ import {
   validateAdapterConfigDraft,
   validateCapabilitiesDraft,
   validateCostProfileDraft,
+  validateImageRouteExecutionDraft,
   validatePricingDraft,
   resolveVideoCostBillingType,
   videoCostDraftForBillingType,
@@ -120,7 +123,7 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /每条视频成本/);
   assert.match(source, /继承模型能力/);
   assert.match(source, /capabilitiesOverride,/);
-  assert.match(source, /图片调用适配器/);
+  assert.match(source, /图片调用协议/);
   assert.match(source, /兼容旧逻辑 \/ Legacy/);
   assert.match(source, /Gemini Native \/ Nano Banana/);
   assert.match(source, /Seedream Images API/);
@@ -128,6 +131,18 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /Resolution 参数/);
   assert.match(source, /Generation Endpoint/);
   assert.match(source, /Edit Endpoint/);
+  assert.match(source, /执行方式/);
+  assert.match(source, /继承协议默认/);
+  assert.match(source, /直返结果/);
+  assert.match(source, /异步任务/);
+  assert.match(source, /GENERIC_OPENAI_IMAGE/);
+  assert.match(source, /单图 image/);
+  assert.match(source, /多图 images/);
+  assert.match(source, /该 Route 支持参考图，但尚未确认参考图序列化字段/);
+  assert.match(source, /USELG Image Task/);
+  assert.match(source, /Generic Task/);
+  assert.match(source, /Submit Endpoint/);
+  assert.match(source, /仅切换执行方式不会把长连接接口变成异步接口/);
   assert.match(source, /\.\.\.\(adapterChanged \? \{ adapterKey \} : \{\}\)/);
   assert.doesNotMatch(source, /<strong>Quality<\/strong>/);
   assert.match(source, /确认删除模型/);
@@ -156,6 +171,31 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.doesNotMatch(source, /配置已被其他操作修改，请刷新后重试/);
   assert.doesNotMatch(source, /<textarea/);
   assert.doesNotMatch(source, /<input[^>]+upstreamModelId/);
+});
+
+test("keeps image protocol and execution lifecycle independent", () => {
+  assert.equal(imageRouteExecutionMode(undefined), "INHERIT");
+  assert.equal(imageRouteExecutionMode("INHERIT"), "INHERIT");
+  assert.equal(imageRouteExecutionMode("DIRECT"), "DIRECT");
+  assert.equal(imageRouteExecutionMode("TASK"), "TASK");
+
+  assert.doesNotThrow(() => validateImageRouteExecutionDraft("INHERIT", null));
+  assert.doesNotThrow(() => validateImageRouteExecutionDraft("DIRECT", null));
+  const uselg = imageTaskExecutionConfigFor("USELG_IMAGE_TASK", {
+    submitEndpoint: "/v1/images/generations",
+  });
+  assert.equal(uselg.statusEndpointTemplate, "/v1/images/tasks/{taskId}?view=summary");
+  assert.doesNotThrow(() => validateImageRouteExecutionDraft("TASK", uselg));
+  assert.throws(() => validateImageRouteExecutionDraft("TASK", null), /任务协议/);
+  assert.throws(() => validateImageRouteExecutionDraft("TASK", {
+    profile: "GENERIC_TASK",
+    submitEndpoint: "/v1/images/generations",
+  }), /状态接口或结果接口/);
+  assert.throws(() => validateImageRouteExecutionDraft("TASK", {
+    profile: "USELG_IMAGE_TASK",
+    submitEndpoint: "/v1beta/models/gemini-3.1-flash-image:generateContent",
+  }), /不是已确认的快速任务提交接口/);
+  assert.throws(() => validateImageRouteExecutionDraft("DIRECT", uselg), /不能保留 executionConfig/);
 });
 
 test("normalizes dynamic video resolutions, durations, and aspect ratios", () => {

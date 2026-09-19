@@ -321,6 +321,26 @@
 .structuredForm > header strong { font-size: 10px; }
 .structuredForm > header small { color: #7d899b; font-size: 8px; }
 .structuredForm > div,.priceFieldGrid { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+.executionProtocol { margin: 0; padding: 11px; display: grid; gap: 9px; border: 1px solid #dce4f0; border-radius: 11px; background: #f8faff; }
+.executionProtocol legend { padding: 0 5px; color: #40516d; font-size: 9px; font-weight: 900; }
+.executionProtocol > div:first-of-type { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+.executionProtocol > div:first-of-type > label { padding: 10px; display: flex; align-items: flex-start; gap: 8px; border: 1px solid #dfe5ef; border-radius: 9px; background: #fff; cursor: pointer; }
+.executionProtocol > div:first-of-type > label[data-selected="true"] { border-color: #8fb4f4; background: #edf4ff; }
+.executionProtocol > div:first-of-type > label[data-disabled="true"] { cursor: not-allowed; opacity: .58; }
+.executionProtocol > div:first-of-type > label > input { width: 14px; min-height: 14px; margin: 1px 0 0; }
+.executionProtocol label span { display: grid; gap: 3px; }
+.executionProtocol label strong { color: #33445f; font-size: 10px; }
+.executionProtocol label small { color: #7d899b; font-size: 8px; font-weight: 500; line-height: 1.45; }
+.protocolNotice { padding: 9px 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-radius: 8px; background: #fff7e8; color: #875b1f; font-size: 8px; line-height: 1.45; }
+.protocolNotice button { flex: 0 0 auto; min-height: 30px; padding: 0 9px; border: 1px solid #e0bd81; border-radius: 7px; background: #fff; color: #805515; font-size: 8px; font-weight: 850; cursor: pointer; }
+.taskExecutionFields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.taskExecutionFields > label { display: grid; gap: 5px; }
+.taskExecutionFields > label strong { color: #536177; font-size: 8px; }
+.taskExecutionFields > .protocolNotice,.taskExecutionFields > details { grid-column: 1 / -1; }
+.inlineProtocolWarning { grid-template-columns: 1fr!important; padding: 9px 10px; border: 1px solid #edcf99; border-radius: 8px; background: #fff8eb; color: #94621c; font-size: 8px; }
+.adapterAdvanced { border-top: 1px solid #e6eaf1; }
+.adapterAdvanced summary { padding-top: 9px; color: #768397; font-size: 8px; cursor: pointer; }
+.adapterAdvanced pre { max-height: 180px; overflow: auto; color: #536177; font: 8px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; white-space: pre-wrap; }
 .choiceField { min-width: 0; margin: 0; padding: 10px; border: 1px solid #e4e8f0; border-radius: 10px; background: #fbfcfe; }
 .choiceField legend { padding: 0 4px; color: #536177; font-size: 9px; font-weight: 850; }
 .choiceField > div { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -362,6 +382,9 @@
 .routeCards > article > header strong,.routeCards > article > header small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .routeCards > article > header strong { font-size: 11px; }
 .routeCards > article > header small { color: #7e8b9e; font-size: 8px; }
+.routeProtocolBadges { display: flex; flex-wrap: wrap; gap: 5px; }
+.routeProtocolBadges code,.routeProtocolBadges span { padding: 3px 6px; border-radius: 6px; background: #edf1f7; color: #58677d; font: 7px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; }
+.routeProtocolBadges span[data-mode="task"] { background: #e8f2ff; color: #2664bb; }
 .routeCards > article > header > span { padding: 4px 7px; border-radius: 99px; background: #fff1df; color: #a56412; font-size: 8px; font-weight: 900; }
 .routeCards > article > header > span[data-ok="true"] { background: #e7f7f1; color: #16835f; }
 .routeCards dl { margin: 0; display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; }
@@ -439,7 +462,7 @@
   .discoveryIdentity,.discoveryActions,.createModelPanel { grid-column: 1 / -1; }
   .discoveryActions { grid-template-columns: 1fr 1fr; }
   .createModelPanel > header,.createModelPanel > footer,.modelEditorHeader,.aliasManager > header { align-items: stretch; flex-direction: column; }
-  .editorCard .formGrid,.switchGrid,.priceOverviewV2,.structuredForm > div,.priceFieldGrid,.costForm,.pricingPolicyV2,.routeCards dl { grid-template-columns: 1fr; }
+  .editorCard .formGrid,.switchGrid,.priceOverviewV2,.structuredForm > div,.executionProtocol > div:first-of-type,.taskExecutionFields,.priceFieldGrid,.costForm,.pricingPolicyV2,.routeCards dl { grid-template-columns: 1fr; }
   .aliasManager > header > div:last-child { grid-template-columns: 1fr auto; }
   .priceDiffPanel article { grid-template-columns: 1fr; }
   .mappingSummary { grid-template-columns: 1fr; }

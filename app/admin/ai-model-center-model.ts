@@ -6,6 +6,8 @@ export type AiRoutingMode = "LEGACY" | "MANAGED";
 export type AiPricingMode = "MANUAL" | "MARKUP";
 export type VideoBillingType = "video_flat" | "video_second" | "video_duration" | "video_resolution_duration";
 export type AiUsageModelKey = "IMAGE_ANALYSIS" | "CANVAS_TEXT";
+export type ImageRouteExecutionMode = "INHERIT" | "DIRECT" | "TASK";
+export type ImageTaskExecutionProfile = "USELG_IMAGE_TASK" | "GENERIC_TASK";
 export type AiModelRoute = {
   id: string;
   canonicalModelId: string | null;
@@ -21,6 +23,8 @@ export type AiModelRoute = {
   capabilitiesOverride: JsonObject | null;
   adapterKey: string | null;
   adapterConfig: JsonObject | null;
+  executionMode?: ImageRouteExecutionMode | null;
+  executionConfig?: JsonObject | null;
   metadata: JsonObject | null;
   pricingSyncStatus: string;
   costUpdatedAt: string | null;
@@ -386,6 +390,7 @@ export function validateAdapterConfigDraft(adapterConfig: JsonObject) {
     resolutionParameter: ["none", "size", "resolution"],
     aspectRatioParameter: ["none", "aspect_ratio", "ratio"],
     referenceSerialization: ["array"],
+    referenceSerializer: ["json_image", "json_images"],
   };
   Object.entries(enumFields).forEach(([key, allowed]) => {
     const value = adapterConfig[key];
@@ -403,6 +408,7 @@ export function validateAdapterConfigDraft(adapterConfig: JsonObject) {
     "statusEndpointTemplate",
     "contentEndpointTemplate",
     "generationEndpoint",
+    "editEndpoint",
     "statusEndpoint",
   ];
   stringFields.forEach((key) => {
@@ -410,6 +416,99 @@ export function validateAdapterConfigDraft(adapterConfig: JsonObject) {
       throw new Error(`${key} 必须是字符串`);
     }
   });
+  if (adapterConfig.async !== undefined
+    && adapterConfig.async !== true
+    && adapterConfig.async !== false
+    && adapterConfig.async !== "inherit") {
+    throw new Error("async 配置无效");
+  }
+}
+
+export function imageRouteExecutionMode(value: unknown): ImageRouteExecutionMode {
+  return value === "DIRECT" || value === "TASK" ? value : "INHERIT";
+}
+
+export function imageTaskExecutionConfigFor(
+  profile: ImageTaskExecutionProfile | "",
+  current: JsonObject | null | undefined = null,
+): JsonObject {
+  const shared = {
+    taskIdPath: "task_id",
+    statusPath: "status",
+    pollAfterMsPath: "poll_after_ms",
+    processingStatuses: ["queued", "pending", "processing", "in_progress"],
+    completedStatuses: ["success", "succeeded", "completed", "done", "finished"],
+    failedStatuses: ["failed", "failure", "error", "cancelled", "canceled"],
+    assetArrayPath: "assets",
+    signedUrlPath: "signed_url",
+    downloadUrlPath: "download_url",
+    urlPath: "url",
+    submitTimeoutMs: 60000,
+  };
+  if (profile === "USELG_IMAGE_TASK") return {
+    ...shared,
+    profile,
+    submitEndpoint: "",
+    statusEndpointTemplate: "/v1/images/tasks/{taskId}?view=summary",
+    ...current,
+  };
+  if (profile === "GENERIC_TASK") return {
+    ...shared,
+    profile,
+    submitEndpoint: "",
+    statusEndpointTemplate: "",
+    resultEndpointTemplate: "",
+    ...current,
+  };
+  return { ...current };
+}
+
+export function validateImageRouteExecutionDraft(
+  executionModeValue: unknown,
+  executionConfig: JsonObject | null | undefined,
+) {
+  const executionMode = imageRouteExecutionMode(executionModeValue);
+  if (executionMode !== "TASK") {
+    if (executionConfig !== null && executionConfig !== undefined) {
+      throw new Error("非异步任务模式不能保留 executionConfig");
+    }
+    return;
+  }
+  const config = executionConfig ?? {};
+  if (config.profile !== "USELG_IMAGE_TASK" && config.profile !== "GENERIC_TASK") {
+    throw new Error("异步任务模式必须选择任务协议");
+  }
+  if (typeof config.submitEndpoint !== "string"
+    || !/^\/(?!\/)/.test(config.submitEndpoint.trim())) {
+    throw new Error("异步任务模式必须填写有效的 Submit Endpoint");
+  }
+  if (/:generateContent(?:\?|$)/i.test(config.submitEndpoint.trim())) {
+    throw new Error("Gemini generateContent 不是已确认的快速任务提交接口，不能用于异步任务模式");
+  }
+  const statusEndpoint = typeof config.statusEndpointTemplate === "string"
+    ? config.statusEndpointTemplate.trim()
+    : "";
+  const resultEndpoint = typeof config.resultEndpointTemplate === "string"
+    ? config.resultEndpointTemplate.trim()
+    : "";
+  if (!statusEndpoint && !resultEndpoint) {
+    throw new Error("异步任务模式必须填写状态接口或结果接口模板");
+  }
+  for (const [key, value] of Object.entries(config)) {
+    if (key.endsWith("Path") && (typeof value !== "string" || !value.trim())) {
+      throw new Error(`${key} 必须是非空字符串`);
+    }
+  }
+  if (config.submitTimeoutMs !== undefined) {
+    const timeout = Number(config.submitTimeoutMs);
+    if (!Number.isInteger(timeout) || timeout < 45000 || timeout > 90000) {
+      throw new Error("submitTimeoutMs 必须是 45000 到 90000 之间的整数");
+    }
+  }
+  if (config.asyncParameterValue !== undefined
+    && (typeof config.asyncParameterName !== "string" || !config.asyncParameterName.trim())) {
+    throw new Error("配置 async 参数值前必须填写参数名");
+  }
 }
 
 export type AdminAiUsageModelBindings = {

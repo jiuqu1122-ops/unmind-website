@@ -9,6 +9,8 @@ import {
   effectiveDiscoveryModality,
   formatJson,
   humanModelStatus,
+  imageRouteExecutionMode,
+  imageTaskExecutionConfigFor,
   isModelCenterUnavailable,
   isUnsupportedPrice,
   lowestRouteCost,
@@ -23,6 +25,7 @@ import {
   validateAdapterConfigDraft,
   validateCapabilitiesDraft,
   validateCostProfileDraft,
+  validateImageRouteExecutionDraft,
   validatePricingDraft,
   resolveVideoCostBillingType,
   videoBillingTypeOptions,
@@ -36,6 +39,7 @@ import {
   type AiModelRoute,
   type AiUpstreamDiscovery,
   type CapabilityOptionKind,
+  type ImageRouteExecutionMode,
   type JsonObject,
   type VideoBillingType,
 } from "./ai-model-center-model";
@@ -61,6 +65,8 @@ type RouteDraft = {
   capabilitiesOverride: JsonObject | null;
   adapterKey: string;
   adapterConfig: JsonObject | null;
+  executionMode: ImageRouteExecutionMode;
+  executionConfig: JsonObject | null;
 };
 
 type CreateDraft = {
@@ -271,6 +277,10 @@ const imageAdapterConfigFor = (
     generationEndpoint: "/v1/images/generations",
     ...cloneObject(current),
   };
+  if (adapterKey === "GENERIC_OPENAI_IMAGE") return {
+    generationEndpoint: "/v1/images/generations",
+    ...cloneObject(current),
+  };
   return null;
 };
 
@@ -282,6 +292,8 @@ const routeDraftsFor = (routes: AiModelRoute[]): Record<string, RouteDraft> => O
     : cloneObject(route.capabilitiesOverride),
   adapterKey: route.adapterKey ?? "",
   adapterConfig: route.adapterConfig == null ? null : cloneObject(route.adapterConfig),
+  executionMode: imageRouteExecutionMode(route.executionMode),
+  executionConfig: route.executionConfig == null ? null : cloneObject(route.executionConfig),
 }]));
 
 const bundleSignature = (bundle: DraftBundle) => JSON.stringify(bundle);
@@ -857,15 +869,50 @@ function CostEditor({ modality, value, onChange }: {
   </div>;
 }
 
-function ImageAdapterEditor({ value, onChange }: {
+function ImageAdapterEditor({ routeId, value, supportsReferenceImages, onChange }: {
+  routeId: string;
   value: RouteDraft;
+  supportsReferenceImages: boolean;
   onChange: (next: RouteDraft) => void;
 }) {
   const config = imageAdapterConfigFor(value.adapterKey, value.adapterConfig);
-  const setConfig = (key: string, next: unknown) => onChange({
-    ...value,
-    adapterConfig: { ...objectValue(config), [key]: next },
-  });
+  const executionMode = imageRouteExecutionMode(value.executionMode);
+  const executionConfig = objectValue(value.executionConfig);
+  const taskProfile = executionConfig.profile === "USELG_IMAGE_TASK"
+    || executionConfig.profile === "GENERIC_TASK"
+    ? executionConfig.profile
+    : "";
+  const setConfig = (key: string, next: unknown) => {
+    const nextConfig = { ...objectValue(config), [key]: next };
+    if (next === undefined) delete nextConfig[key];
+    onChange({ ...value, adapterConfig: nextConfig });
+  };
+  const setExecutionMode = (next: ImageRouteExecutionMode) => {
+    onChange({
+      ...value,
+      executionMode: next,
+      executionConfig: next === "TASK" ? value.executionConfig ?? {} : null,
+    });
+  };
+  const setExecutionConfig = (key: string, next: unknown) => {
+    const nextConfig = { ...executionConfig, [key]: next };
+    if (next === undefined || next === "") delete nextConfig[key];
+    onChange({ ...value, executionConfig: nextConfig });
+  };
+  const selectTaskProfile = (profile: "" | "USELG_IMAGE_TASK" | "GENERIC_TASK") => {
+    if (!profile) {
+      onChange({ ...value, executionConfig: {} });
+      return;
+    }
+    const preserved: JsonObject = {};
+    for (const key of ["submitEndpoint", "asyncParameterName", "asyncParameterValue"] as const) {
+      if (executionConfig[key] !== undefined) preserved[key] = executionConfig[key];
+    }
+    onChange({
+      ...value,
+      executionConfig: imageTaskExecutionConfigFor(profile, preserved),
+    });
+  };
   const setExactDimension = (resolution: string, aspectRatio: string, next: string) => {
     const exactDimensions = cloneObject(objectValue(config?.exactDimensions));
     const byResolution = cloneObject(objectValue(exactDimensions[resolution]));
@@ -874,13 +921,15 @@ function ImageAdapterEditor({ value, onChange }: {
     setConfig("exactDimensions", exactDimensions);
   };
   const imagesApiAdapter = value.adapterKey === "SEEDREAM_IMAGES_API"
-    || value.adapterKey === "GROK_IMAGES_API";
+    || value.adapterKey === "GROK_IMAGES_API"
+    || value.adapterKey === "GENERIC_OPENAI_IMAGE";
+  const referenceSerializer = String(config?.referenceSerializer ?? "");
   return (
     <div className={styles.structuredForm}>
       <label>
-        <strong>图片调用适配器</strong>
+        <strong>图片调用协议</strong>
         <select
-          aria-label="图片调用适配器"
+          aria-label="图片调用协议"
           value={value.adapterKey}
           onChange={(event) => {
             const adapterKey = event.target.value;
@@ -893,19 +942,57 @@ function ImageAdapterEditor({ value, onChange }: {
         >
           {imageAdapterOptions.map((option) => <option key={option.value || "legacy"} value={option.value}>{option.label}</option>)}
         </select>
-        <small>留空时完整沿用当前生产调用逻辑；只有主动选择后才会写入 Route。</small>
+        <small>协议只决定 endpoint、请求体、参考图和模型参数的序列化，不决定 HTTP 生命周期。</small>
       </label>
+      <fieldset className={styles.executionProtocol}>
+        <legend>执行方式</legend>
+        <div>
+          <label data-selected={executionMode === "INHERIT"}>
+            <input type="radio" name={`image-execution-${routeId}`} checked={executionMode === "INHERIT"} onChange={() => setExecutionMode("INHERIT")} />
+            <span><strong>继承协议默认</strong><small>完整沿用当前生产调用逻辑。</small></span>
+          </label>
+          <label data-selected={executionMode === "DIRECT"}>
+            <input type="radio" name={`image-execution-${routeId}`} checked={executionMode === "DIRECT"} onChange={() => setExecutionMode("DIRECT")} />
+            <span><strong>直返结果</strong><small>等待当前调用请求直接返回最终图片。</small></span>
+          </label>
+          <label data-selected={executionMode === "TASK"}>
+            <input type="radio" name={`image-execution-${routeId}`} checked={executionMode === "TASK"} onChange={() => setExecutionMode("TASK")} />
+            <span><strong>异步任务</strong><small>提交任务后获取 task_id，并由服务端轮询结果。</small></span>
+          </label>
+        </div>
+        {executionMode === "TASK" && <div className={styles.taskExecutionFields}>
+          <label><strong>任务协议</strong><select aria-label="任务协议" value={taskProfile} onChange={(event) => selectTaskProfile(event.target.value as "" | "USELG_IMAGE_TASK" | "GENERIC_TASK")}><option value="">请选择已确认的任务协议</option><option value="USELG_IMAGE_TASK">USELG Image Task</option><option value="GENERIC_TASK">Generic Task</option></select></label>
+          <label><strong>Submit Endpoint</strong><input aria-label="Submit Endpoint" placeholder="例如 /v1/images/generations" value={String(executionConfig.submitEndpoint ?? "")} onChange={(event) => setExecutionConfig("submitEndpoint", event.target.value)} /></label>
+          <label><strong>提交超时（毫秒）</strong><input aria-label="Submit Timeout" type="number" min={45000} max={90000} step={1000} value={String(executionConfig.submitTimeoutMs ?? 60000)} onChange={(event) => setExecutionConfig("submitTimeoutMs", Number(event.target.value))} /></label>
+          <label><strong>Async 参数名（可选）</strong><input aria-label="Async Parameter Name" placeholder="例如 async" value={String(executionConfig.asyncParameterName ?? "")} onChange={(event) => setExecutionConfig("asyncParameterName", event.target.value)} /></label>
+          {Boolean(executionConfig.asyncParameterName) && <label><strong>Async 参数值</strong><select aria-label="Async Parameter Value" value={String(executionConfig.asyncParameterValue ?? true)} onChange={(event) => setExecutionConfig("asyncParameterValue", event.target.value === "true")}><option value="true">true</option><option value="false">false</option></select></label>}
+          <div className={styles.protocolNotice}>当前调用协议必须有一个能快速返回 task_id 或 status_url 的真实提交接口；仅切换执行方式不会把长连接接口变成异步接口。</div>
+          {(value.adapterKey === "GEMINI_NATIVE_IMAGE" || !value.adapterKey) && <div className={styles.protocolNotice}>如果该 USELG Banana 渠道的真实异步入口是 /v1/images/generations + async=true，请选择 Generic OpenAI Images 协议；不要继续使用阻塞的 Gemini generateContent 协议。</div>}
+          <details className={styles.adapterAdvanced}>
+            <summary>任务解析高级配置</summary>
+            <div className={styles.formGrid}>
+              <label><strong>Status Endpoint Template</strong><input aria-label="Status Endpoint Template" placeholder="/v1/images/tasks/{taskId}" value={String(executionConfig.statusEndpointTemplate ?? "")} onChange={(event) => setExecutionConfig("statusEndpointTemplate", event.target.value)} /></label>
+              <label><strong>Result Endpoint Template</strong><input aria-label="Result Endpoint Template" placeholder="可选" value={String(executionConfig.resultEndpointTemplate ?? "")} onChange={(event) => setExecutionConfig("resultEndpointTemplate", event.target.value)} /></label>
+              {(["taskIdPath", "statusPath", "pollAfterMsPath", "assetArrayPath", "signedUrlPath", "downloadUrlPath", "urlPath"] as const).map((key) => <label key={key}><strong>{key}</strong><input aria-label={key} value={String(executionConfig[key] ?? "")} onChange={(event) => setExecutionConfig(key, event.target.value)} /></label>)}
+              {(["processingStatuses", "completedStatuses", "failedStatuses"] as const).map((key) => <label key={key}><strong>{key}</strong><input aria-label={key} value={Array.isArray(executionConfig[key]) ? executionConfig[key].join(", ") : ""} onChange={(event) => setExecutionConfig(key, event.target.value.split(",").map((item) => item.trim()).filter(Boolean))} /></label>)}
+            </div>
+          </details>
+        </div>}
+      </fieldset>
       {imagesApiAdapter && config && (<>
         <div className={styles.formGrid}>
           <label><strong>Resolution 参数</strong><select aria-label="Resolution 参数" value={String(config.resolutionParameter ?? "none")} onChange={(event) => setConfig("resolutionParameter", event.target.value)}><option value="none">不发送</option><option value="size">size</option><option value="resolution">resolution</option></select></label>
           <label><strong>Resolution 值</strong><select aria-label="Resolution 值" value={String(config.resolutionValueMode ?? "label")} onChange={(event) => setConfig("resolutionValueMode", event.target.value)}><option value="label">label（例如 2K）</option><option value="exact">exact（仅使用已配置映射）</option></select></label>
           <label><strong>Aspect Ratio</strong><select aria-label="Aspect Ratio 参数" value={String(config.aspectRatioParameter ?? "none")} onChange={(event) => setConfig("aspectRatioParameter", event.target.value)}><option value="none">不发送</option><option value="aspect_ratio">aspect_ratio</option></select></label>
-          {value.adapterKey === "SEEDREAM_IMAGES_API" && <label><strong>Async</strong><select aria-label="Async 参数" value={String(config.async ?? "inherit")} onChange={(event) => setConfig("async", event.target.value === "true" ? true : event.target.value === "false" ? false : "inherit")}><option value="inherit">inherit（不发送）</option><option value="true">true</option><option value="false">false</option></select></label>}
-          <label><strong>Generation Endpoint</strong><input aria-label="Generation Endpoint" value={String(config.generationEndpoint ?? "/v1/images/generations")} onChange={(event) => setConfig("generationEndpoint", event.target.value)} /></label>
-          {value.adapterKey === "SEEDREAM_IMAGES_API" && <label><strong>Edit Endpoint</strong><input aria-label="Edit Endpoint" value={String(config.editEndpoint ?? "/v1/images/edits")} onChange={(event) => setConfig("editEndpoint", event.target.value)} /></label>}
+          <label><strong>生成接口</strong><input aria-label="Generation Endpoint" value={String(config.generationEndpoint ?? "/v1/images/generations")} onChange={(event) => setConfig("generationEndpoint", event.target.value)} /></label>
+          {(value.adapterKey === "SEEDREAM_IMAGES_API" || value.adapterKey === "GENERIC_OPENAI_IMAGE") && <label><strong>编辑接口（可选）</strong><input aria-label="Edit Endpoint" value={String(config.editEndpoint ?? (value.adapterKey === "SEEDREAM_IMAGES_API" ? "/v1/images/edits" : ""))} onChange={(event) => setConfig("editEndpoint", event.target.value)} /></label>}
+          {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <label><strong>参考图格式</strong><select aria-label="参考图格式" value={referenceSerializer} onChange={(event) => setConfig("referenceSerializer", event.target.value || undefined)}><option value="">无</option><option value="json_image">单图 image</option><option value="json_images">多图 images</option></select></label>}
         </div>
+        {value.adapterKey === "GENERIC_OPENAI_IMAGE" && supportsReferenceImages && !referenceSerializer && <div className={styles.inlineProtocolWarning}>该 Route 支持参考图，但尚未确认参考图序列化字段。</div>}
         {config.resolutionValueMode === "exact" && <details><summary>配置 exact dimension mapping</summary><p>只会发送这里明确填写的像素值；未配置的分辨率与比例组合会停止请求，不会猜测尺寸。</p><div className={styles.formGrid}>{["1K", "2K", "4K"].flatMap((resolution) => ["1:1", "16:9", "9:16", "3:2", "2:3", "4:3", "3:4"].map((aspectRatio) => <label key={`${resolution}:${aspectRatio}`}><strong>{resolution} · {aspectRatio}</strong><input aria-label={`${resolution} ${aspectRatio} exact dimension`} placeholder="例如 1672x941" value={String(objectValue(objectValue(config.exactDimensions)[resolution])[aspectRatio] ?? "")} onChange={(event) => setExactDimension(resolution, aspectRatio, event.target.value)} /></label>))}</div></details>}
+        <details className={styles.adapterAdvanced}><summary>协议高级 JSON（只读）</summary><pre>{formatJson(config)}</pre></details>
       </>)}
+      {executionMode === "TASK" && <details className={styles.adapterAdvanced}><summary>执行配置 JSON（只读）</summary><pre>{formatJson(executionConfig)}</pre></details>}
     </div>
   );
 }
@@ -1276,14 +1363,25 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
     const adapterConfig = draft.adapterConfig === null
       ? null
       : withoutBlankValues(draft.adapterConfig) as JsonObject;
+    const executionMode = imageRouteExecutionMode(draft.executionMode);
+    const executionConfig = draft.executionConfig === null
+      ? null
+      : withoutBlankValues(draft.executionConfig) as JsonObject;
     const adapterChanged = detail?.modality !== "chat"
       && adapterKey !== (route.adapterKey ?? null);
     const adapterConfigChanged = detail?.modality !== "chat"
       && JSON.stringify(adapterConfig) !== JSON.stringify(route.adapterConfig ?? null);
+    const executionModeChanged = detail?.modality === "image"
+      && executionMode !== imageRouteExecutionMode(route.executionMode);
+    const executionConfigChanged = detail?.modality === "image"
+      && JSON.stringify(executionConfig) !== JSON.stringify(route.executionConfig ?? null);
     try {
       validateCostProfileDraft(costProfile);
       if (capabilitiesOverride) validateCapabilitiesDraft(capabilitiesOverride);
       if (adapterConfig) validateAdapterConfigDraft(adapterConfig);
+      if (detail?.modality === "image") {
+        validateImageRouteExecutionDraft(executionMode, executionConfig);
+      }
     } catch (reason) {
       onError(reasonMessage(reason, "上游成本格式错误"));
       return false;
@@ -1296,6 +1394,8 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
         ...(capabilitiesChanged ? { capabilitiesOverride } : {}),
         ...(adapterChanged ? { adapterKey } : {}),
         ...(adapterConfigChanged ? { adapterConfig } : {}),
+        ...(executionModeChanged ? { executionMode } : {}),
+        ...(executionConfigChanged ? { executionConfig } : {}),
         expectedUpdatedAt: route.updatedAt,
       }),
     });
@@ -1742,20 +1842,33 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
                       : cloneObject(route.capabilitiesOverride),
                     adapterKey: route.adapterKey ?? "",
                     adapterConfig: route.adapterConfig == null ? null : cloneObject(route.adapterConfig),
+                    executionMode: imageRouteExecutionMode(route.executionMode),
+                    executionConfig: route.executionConfig == null ? null : cloneObject(route.executionConfig),
                   };
                   const isDefault = detail.defaultRouteId === route.id;
+                  const effectiveRouteCapabilities = routeDraft.capabilitiesOverride ?? capabilities;
+                  const supportsReferenceImages = Boolean(
+                    effectiveRouteCapabilities.supportsReferenceImage
+                    || effectiveRouteCapabilities.supportsReferenceImages
+                    || Number(effectiveRouteCapabilities.maxReferenceImages ?? 0) > 0,
+                  );
                   const inferredModality = route.metadata?.inferredModality;
                   const modalityMismatch = (inferredModality === "chat" || inferredModality === "image" || inferredModality === "video")
                     && inferredModality !== detail.modality;
                   return <article key={route.id}>
-                    <header><div><strong>{route.channel?.name ?? route.provider}</strong><small>上游模型：{route.upstreamModelId}</small></div><span data-ok={operationalRoute(route)}>● {routeState(route)}</span></header>
+                    <header><div><strong>{route.channel?.name ?? route.provider}</strong><small>上游模型：{route.upstreamModelId}</small>{detail.modality === "image" && <div className={styles.routeProtocolBadges}><code>{route.adapterKey || "LEGACY"}</code><span data-mode={imageRouteExecutionMode(route.executionMode)}>{imageRouteExecutionMode(route.executionMode) === "TASK" ? "异步任务" : imageRouteExecutionMode(route.executionMode) === "DIRECT" ? "直返" : "继承默认"}</span></div>}</div><span data-ok={operationalRoute(route)}>● {routeState(route)}</span></header>
                     {modalityMismatch && <div className={styles.inlineWarning}>同步识别该上游为{modalityLabel[inferredModality]}模型，但当前映射属于{modalityLabel[detail.modality]}模型。系统不会自动迁移；请先解除映射，再到未映射列表重新选择类型与 Canonical 模型。</div>}
                     <dl><div><dt>采购成本</dt><dd>{costSummary(route.costProfile)}</dd></div><div><dt>优先级</dt><dd>{route.priority}</dd></div><div><dt>默认渠道</dt><dd>{isDefault ? "是" : "否"}</dd></div><div><dt>最后同步</dt><dd>{formatDateTime(route.lastSyncedAt)}</dd></div></dl>
                     <details className={styles.routeCostEditor}>
                       <summary>编辑渠道成本与能力</summary>
                       <label><strong>优先级</strong><input type="number" min={0} value={routeDraft.priority} onChange={(event) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, priority: event.target.value } }))} /></label>
                       <CostEditor modality={detail.modality} value={routeDraft.costProfile} onChange={(costProfile) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, costProfile } }))} />
-                      {detail.modality === "image" && <ImageAdapterEditor value={routeDraft} onChange={(next) => setRouteDrafts((current) => ({ ...current, [route.id]: next }))} />}
+                      {detail.modality === "image" && <ImageAdapterEditor
+                        routeId={route.id}
+                        value={routeDraft}
+                        supportsReferenceImages={supportsReferenceImages}
+                        onChange={(next) => setRouteDrafts((current) => ({ ...current, [route.id]: next }))}
+                      />}
                       {detail.modality === "video" && <VideoAdapterEditor value={routeDraft} onChange={(next) => setRouteDrafts((current) => ({ ...current, [route.id]: next }))} />}
                       <label className={styles.inlineCheck}>
                         <input
@@ -1786,7 +1899,7 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
                       )}
                       <button type="button" disabled={busy} onClick={() => void saveRoute(route)}>保存渠道设置</button>
                     </details>
-                    <footer>{!isDefault && route.enabled && <button type="button" className={styles.ghost} onClick={() => void setDefaultRoute(route)}>设为默认</button>}<button type="button" className={styles.ghost} onClick={() => { setRemapRoute(route); setRemapTarget(""); setRemapQuery(""); }}>更改映射</button><button type="button" className={route.enabled ? styles.textDanger : styles.ghost} onClick={() => void toggleRoute(route, !route.enabled)}>{route.enabled ? "停用" : "启用"}</button><details><summary>更多</summary><div><button type="button" className={styles.textDanger} disabled={!route.channelId} onClick={() => unmapRoute(route)}>解除映射</button><details><summary>高级信息</summary><pre>{formatJson({ routeId: route.id, canonicalModelId: route.canonicalModelId, upstreamModelId: route.upstreamModelId, provider: route.provider, pricingSyncStatus: route.pricingSyncStatus, capabilitiesOverride: route.capabilitiesOverride, adapterKey: route.adapterKey, adapterConfig: route.adapterConfig, metadata: route.metadata })}</pre></details></div></details></footer>
+                    <footer>{!isDefault && route.enabled && <button type="button" className={styles.ghost} onClick={() => void setDefaultRoute(route)}>设为默认</button>}<button type="button" className={styles.ghost} onClick={() => { setRemapRoute(route); setRemapTarget(""); setRemapQuery(""); }}>更改映射</button><button type="button" className={route.enabled ? styles.textDanger : styles.ghost} onClick={() => void toggleRoute(route, !route.enabled)}>{route.enabled ? "停用" : "启用"}</button><details><summary>更多</summary><div><button type="button" className={styles.textDanger} disabled={!route.channelId} onClick={() => unmapRoute(route)}>解除映射</button><details><summary>高级信息</summary><pre>{formatJson({ routeId: route.id, canonicalModelId: route.canonicalModelId, upstreamModelId: route.upstreamModelId, provider: route.provider, pricingSyncStatus: route.pricingSyncStatus, capabilitiesOverride: route.capabilitiesOverride, adapterKey: route.adapterKey, adapterConfig: route.adapterConfig, executionMode: imageRouteExecutionMode(route.executionMode), executionConfig: route.executionConfig, metadata: route.metadata })}</pre></details></div></details></footer>
                   </article>;
                 })}{!detail.routes.length && <div className={styles.noUpstream}><strong>暂无可用上游</strong><p>请从“未映射”页面添加渠道，或继续使用旧版兼容配置。</p></div>}</div>
               </section>
