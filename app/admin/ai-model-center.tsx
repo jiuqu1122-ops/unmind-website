@@ -849,7 +849,15 @@ function CostEditor({ modality, value, onChange }: {
     ].map(([key, label]) => <NumericInput key={key} label={label!} unit="元 / 1M" value={getPath(value, ["standard", key!])} onChange={(next) => set(["standard", key!], next)} />)}</div></div>;
   }
   if (modality === "image") {
-    const prices = objectValue(value.cnyPerImageByResolution);
+    const currency = value.currency === "USD" ? "USD" : "CNY";
+    const mapKey = currency === "USD" ? "amountPerImageByResolution" : "cnyPerImageByResolution";
+    const prices = objectValue(value[mapKey]);
+    const unit = currency === "USD" ? "$ / 张" : "¥ / 张";
+    return <div className={styles.costForm}>
+      <label><strong>成本币种</strong><select value={currency} onChange={(event) => onChange({ ...value, currency: event.target.value })}><option value="CNY">CNY</option><option value="USD">USD</option></select></label>
+      <div className={styles.priceFieldGrid}>{["1k", "2k", "4k"].map((item) => <NumericInput key={item} label={item.toUpperCase()} unit={unit} value={prices[item]} onChange={(next) => set([mapKey, item], next)} />)}</div>
+      {currency === "USD" && <div className={styles.protocolNotice}>USD 成本按原币种保存；系统不会按猜测汇率改写历史人民币成本。</div>}
+    </div>;
     return <div className={styles.costForm}><div className={styles.priceFieldGrid}>{["1k", "2k", "4k"].map((item) => <NumericInput key={item} label={item.toUpperCase()} unit="元 / 张" value={prices[item]} onChange={(next) => set(["cnyPerImageByResolution", item], next)} />)}</div></div>;
   }
   const billingType = resolveVideoCostBillingType(value);
@@ -962,7 +970,8 @@ function ImageAdapterEditor({ routeId, value, supportsReferenceImages, onChange 
         </div>
         {executionMode === "TASK" && <div className={styles.taskExecutionFields}>
           <label><strong>任务协议</strong><select aria-label="任务协议" value={taskProfile} onChange={(event) => selectTaskProfile(event.target.value as "" | "USELG_IMAGE_TASK" | "GENERIC_TASK")}><option value="">请选择已确认的任务协议</option><option value="USELG_IMAGE_TASK">USELG Image Task</option><option value="GENERIC_TASK">Generic Task</option></select></label>
-          <label><strong>Submit Endpoint</strong><input aria-label="Submit Endpoint" placeholder="例如 /v1/images/generations" value={String(executionConfig.submitEndpoint ?? "")} onChange={(event) => setExecutionConfig("submitEndpoint", event.target.value)} /></label>
+          {value.adapterKey !== "SEEDREAM_IMAGES_API" && <label><strong>Submit Endpoint</strong><input aria-label="Submit Endpoint" placeholder="例如 /v1/images/generations" value={String(executionConfig.submitEndpoint ?? "")} onChange={(event) => setExecutionConfig("submitEndpoint", event.target.value)} /></label>}
+          {value.adapterKey === "SEEDREAM_IMAGES_API" && <div className={styles.protocolNotice}>Seedream TASK 提交端点由上面的生成/编辑接口决定；此字段不会覆盖真实生效端点。</div>}
           <label><strong>提交超时（毫秒）</strong><input aria-label="Submit Timeout" type="number" min={45000} max={90000} step={1000} value={String(executionConfig.submitTimeoutMs ?? 60000)} onChange={(event) => setExecutionConfig("submitTimeoutMs", Number(event.target.value))} /></label>
           <label><strong>Async 参数名（可选）</strong><input aria-label="Async Parameter Name" placeholder="例如 async" value={String(executionConfig.asyncParameterName ?? "")} onChange={(event) => setExecutionConfig("asyncParameterName", event.target.value)} /></label>
           {Boolean(executionConfig.asyncParameterName) && <label><strong>Async 参数值</strong><select aria-label="Async Parameter Value" value={String(executionConfig.asyncParameterValue ?? true)} onChange={(event) => setExecutionConfig("asyncParameterValue", event.target.value === "true")}><option value="true">true</option><option value="false">false</option></select></label>}
@@ -1092,10 +1101,7 @@ function VideoAdapterEditor({ value, onChange }: {
           <SwitchField label="等待 Video Available" hint="completed 后仍等待素材可下载" checked={config.requiresVideoAvailable !== false} onChange={(next) => setConfig("requiresVideoAvailable", next)} />
         </div>
       </>}
-      {value.adapterKey && !isGeneric && <div className={styles.formGrid}>
-        <label><strong>Generation Endpoint</strong><input value={String(config.generationEndpoint ?? "")} onChange={(event) => setConfig("generationEndpoint", event.target.value)} placeholder="例如 /v1/video/generations" /></label>
-        <label><strong>Status Endpoint</strong><input value={String(config.statusEndpoint ?? "")} onChange={(event) => setConfig("statusEndpoint", event.target.value)} placeholder="例如 /v1/video/tasks/{id}" /></label>
-      </div>}
+      {value.adapterKey && !isGeneric && <div className={styles.protocolNotice}>Legacy 适配器使用服务端固定协议与端点；此处不显示可编辑的伪配置，实际生效值由服务端适配器决定。</div>}
     </div>
   );
 }

@@ -351,7 +351,7 @@ const costNumericKeys = new Set([
   "upstreamCacheReadCnyPer1m",
   "upstreamCacheWriteCnyPer1m",
 ]);
-const costMapKeys = new Set(["cnyPerImageByResolution"]);
+const costMapKeys = new Set(["cnyPerImageByResolution", "amountPerImageByResolution"]);
 
 export function validateCostProfileDraft(costProfile: JsonObject) {
   if (costProfile.currency !== undefined && costProfile.currency !== "USD" && costProfile.currency !== "CNY") {
@@ -759,9 +759,9 @@ export function costSummary(cost: JsonObject | null) {
     const perSecond = firstNumber(cost, ["amountPerSecond", "cnyPerSecond"]);
     return perSecond === null ? "按秒成本未配置" : `${symbol}${compactNumber(perSecond)}/秒`;
   }
-  const resolutions = resolutionEntries(cost.cnyPerImageByResolution);
+  const resolutions = resolutionEntries(currency === "USD" ? cost.amountPerImageByResolution : cost.cnyPerImageByResolution);
   if (resolutions.length) {
-    return resolutions.map(([key, value]) => `${key.toUpperCase()} ¥${compactNumber(value)}`).join(" · ");
+    return resolutions.map(([key, value]) => `${key.toUpperCase()} ${currency === "USD" ? "$" : "¥"}${compactNumber(value)}`).join(" · ");
   }
   const standard = objectValue(cost.standard);
   const input = firstNumber(standard, ["upstreamInputCnyPer1m"]);
@@ -791,7 +791,9 @@ function representativePair(pricing: JsonObject | null, cost: JsonObject | null)
     return costMode === "video_second" && sellPoints !== null && costCny !== null ? { sellPoints, costCny } : null;
   }
   const priceResolutions = new Map(resolutionEntries(pricing.creditsPerImageByResolution));
-  const costResolutions = new Map(resolutionEntries(cost.cnyPerImageByResolution));
+  const costResolutions = new Map(resolutionEntries(cost.currency === "USD"
+    ? cost.amountPerImageByResolution
+    : cost.cnyPerImageByResolution));
   for (const resolution of ["2k", "1k", "4k", "768p", "1080p"]) {
     const sellPoints = priceResolutions.get(resolution);
     const costCny = costResolutions.get(resolution);
