@@ -10,7 +10,7 @@
     "build": "vinext build",
     "build:static": "next build",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/admin-provider-capabilities.test.mjs tests/admin-ai-model-center.test.mjs tests/admin-membership-usage.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/admin-provider-capabilities.test.mjs tests/admin-ai-model-center.test.mjs tests/admin-membership-usage.test.mjs tests/admin-usage-diagnostics.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit --incremental false",
     "db:generate": "drizzle-kit generate"

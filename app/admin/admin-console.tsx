@@ -26,6 +26,7 @@ import {
   type ReviewShare,
 } from "./admin-model";
 import { AiModelCenter } from "./ai-model-center";
+import { AdminUsageDiagnostics } from "./admin-usage-diagnostics";
 import type { AdminAiModelSummary } from "./ai-model-center-model";
 import styles from "./admin.module.css";
 
@@ -903,6 +904,8 @@ export function AdminConsole() {
               <small>{todayUsage?.totals.tokenRequestsWithoutUsage ? `${todayUsage.totals.tokenRequestsWithoutUsage} 次成功请求未上报` : "全部成功请求已上报"}</small>
             </article>
           </div>
+
+          <AdminUsageDiagnostics days={usageDays} imageModel={usageImageModel} refreshKey={todayUsage?.generatedAt} request={request} />
 
           <div className={styles.usageTableWrap}>
             <table className={styles.usageTable}>
