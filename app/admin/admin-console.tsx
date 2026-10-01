@@ -1227,14 +1227,15 @@ export function AdminConsole() {
           {reviews.map((share) => (
             <article key={share.id} className={styles.reviewCard}>
               <div className={styles.reviewImage}>
-                {share.previews[0] ? <img src={share.previews[0].url} alt="" /> : <span>JSON</span>}
+                {share.previews[0] ? <img src={share.previews[0].url} alt="" /> : <span>{share.kind === "AGENT" ? "MD" : "JSON"}</span>}
                 <em data-status={share.status}>{share.status === "PENDING" ? "待审核" : share.status === "PUBLISHED" ? "已发布" : "已退回"}</em>
               </div>
               <div className={styles.reviewBody}>
-                <small>{share.kind === "WORKFLOW" ? "工作流" : share.kind === "PROMPT" ? "提示词" : "节点预设"} · {share.authorName}</small>
+                <small>{share.kind === "WORKFLOW" ? "工作流" : share.kind === "PROMPT" ? "提示词" : share.kind === "AGENT" ? "智能体" : "节点预设"} · {share.authorName}</small>
                 <h3>{share.title}</h3>
                 <p>{share.description || "没有填写说明"}</p>
                 {share.kind === "PROMPT" && share.prompt && <pre>{share.prompt}</pre>}
+                {share.kind === "AGENT" && share.agentMarkdown && <pre>{share.agentMarkdown}</pre>}
                 <div>{share.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
                 <footer>
                   <button disabled={busy} onClick={() => void updateReview(share.id, "PUBLISHED")}>发布</button>

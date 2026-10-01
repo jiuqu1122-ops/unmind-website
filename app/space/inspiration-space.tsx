@@ -4,8 +4,8 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } fro
 import { apiBaseUrl } from "../site-shared";
 import styles from "./space.module.css";
 
-type ShareKind = "NODE_PRESET" | "WORKFLOW" | "PROMPT";
-type SubmitMode = "JSON" | "PROMPT";
+type ShareKind = "NODE_PRESET" | "WORKFLOW" | "PROMPT" | "AGENT";
+type SubmitMode = "JSON" | "PROMPT" | "AGENT";
 type PreviewImage = { dataUrl: string; width: number; height: number };
 type InspirationShare = {
   id: string;
@@ -39,6 +39,7 @@ const SHARE_KIND_LABELS: Record<ShareKind, string> = {
   NODE_PRESET: "节点预设",
   WORKFLOW: "工作流",
   PROMPT: "提示词",
+  AGENT: "智能体",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -201,6 +202,8 @@ export function InspirationSpace() {
   const [submitMode, setSubmitMode] = useState<SubmitMode>("JSON");
   const [prepared, setPrepared] = useState<PreparedJson | null>(null);
   const [promptText, setPromptText] = useState("");
+  const [agentMarkdown, setAgentMarkdown] = useState("");
+  const [agentFileName, setAgentFileName] = useState("");
   const [extraPreviews, setExtraPreviews] = useState<PreviewImage[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -210,10 +213,10 @@ export function InspirationSpace() {
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const promptPreviewRequired = submitMode === "PROMPT" || prepared?.kind === "PROMPT";
+  const promptPreviewRequired = submitMode === "PROMPT" || (submitMode === "JSON" && prepared?.kind === "PROMPT");
   const visibleSubmissionPreviews = [
     ...(promptPreviewRequired ? extraPreviews.slice(0, 1) : extraPreviews),
-    ...(promptPreviewRequired ? [] : prepared?.embeddedPreviews || []),
+    ...(submitMode === "JSON" && !promptPreviewRequired ? prepared?.embeddedPreviews || [] : []),
   ].slice(0, 6);
 
   const loadItems = useCallback(async (nextKind: "" | ShareKind = "", nextQuery = "") => {
@@ -324,6 +327,40 @@ export function InspirationSpace() {
     }
   };
 
+  const prepareAgentFile = async (file: File) => {
+    setBusy(true);
+    setError("");
+    setProgress("正在检查 Markdown 智能体…");
+    try {
+      if (!/\.md$/i.test(file.name)) throw new Error("请选择 .md 智能体文件");
+      if (file.size > 160_000) throw new Error("Markdown 文件不能超过 160 KB");
+      const markdown = await file.text();
+      if (markdown.length > 40_000 || !markdown.trim()) throw new Error("Markdown 内容为空或超过 40,000 字符");
+      const body = markdown.replace(/^\uFEFF?---\s*\r?\n[\s\S]*?\r?\n---\s*\r?\n/, "").trim();
+      if (!body) throw new Error("Markdown 文件缺少智能体指令");
+      const name = markdown.match(/^name:\s*(.+)$/m)?.[1]?.trim() || body.match(/^#\s+(.+)$/m)?.[1]?.trim() || file.name.replace(/\.md$/i, "");
+      const description = markdown.match(/^description:\s*(.+)$/m)?.[1]?.trim() || "";
+      setAgentMarkdown(markdown);
+      setAgentFileName(file.name);
+      setTitle(name.slice(0, 80));
+      setDescription(description.slice(0, 240));
+      setNotice("Markdown 智能体已识别。下载到灵感抽屉后会自动适配 Chat / 画布能力。");
+    } catch (reason) {
+      setAgentMarkdown("");
+      setAgentFileName("");
+      setError(reason instanceof Error ? reason.message : "Markdown 文件处理失败");
+    } finally {
+      setProgress("");
+      setBusy(false);
+    }
+  };
+
+  const selectAgentFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) await prepareAgentFile(file);
+  };
+
   const selectPreviews = async (event: ChangeEvent<HTMLInputElement>) => {
     const maxFiles = promptPreviewRequired ? 1 : 6;
     const files = [...(event.target.files || [])].slice(0, maxFiles);
@@ -351,8 +388,13 @@ export function InspirationSpace() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const isDirectPromptSubmission = submitMode === "PROMPT";
-    if (!isDirectPromptSubmission && !prepared) {
+    const isAgentSubmission = submitMode === "AGENT";
+    if (submitMode === "JSON" && !prepared) {
       setError("请先选择 JSON 文件");
+      return;
+    }
+    if (isAgentSubmission && !agentMarkdown) {
+      setError("请先选择 Markdown 智能体文件");
       return;
     }
     if (title.trim().length < 2 || authorName.trim().length < 2) {
@@ -363,7 +405,7 @@ export function InspirationSpace() {
       setError("提示词内容至少填写 10 个字符");
       return;
     }
-    const kind: ShareKind = isDirectPromptSubmission ? "PROMPT" : prepared!.kind;
+    const kind: ShareKind = isDirectPromptSubmission ? "PROMPT" : isAgentSubmission ? "AGENT" : prepared!.kind;
     const requiresGeneratedPreview = kind === "PROMPT";
     if (requiresGeneratedPreview && extraPreviews.length === 0) {
       setError("提示词分享必须上传 1 张由该提示词生成的效果图");
@@ -371,14 +413,16 @@ export function InspirationSpace() {
     }
     const previews = [
       ...(requiresGeneratedPreview ? extraPreviews.slice(0, 1) : extraPreviews),
-      ...(requiresGeneratedPreview ? [] : prepared?.embeddedPreviews || []),
+      ...(submitMode === "JSON" && !requiresGeneratedPreview ? prepared?.embeddedPreviews || [] : []),
     ].slice(0, 6);
     const payload = isDirectPromptSubmission
       ? createPromptPayload(title, promptText)
-      : prepared!.payload;
+      : isAgentSubmission
+        ? { type: "inspiration-drawer-agent-share", version: 1, markdown: agentMarkdown }
+        : prepared!.payload;
     const fileName = isDirectPromptSubmission
       ? `${title.trim().replace(/\.json$/i, "") || "提示词分享"}.json`
-      : prepared!.fileName;
+      : isAgentSubmission ? agentFileName : prepared!.fileName;
     setBusy(true);
     setError("");
     setProgress("正在提交审核…");
@@ -401,6 +445,8 @@ export function InspirationSpace() {
       setNotice(result.message);
       setPrepared(null);
       setPromptText("");
+      setAgentMarkdown("");
+      setAgentFileName("");
       setExtraPreviews([]);
       setTitle("");
       setDescription("");
@@ -420,10 +466,10 @@ export function InspirationSpace() {
         <div>
           <span>INSPIRATION SPACE</span>
           <h1>把好用的预设，<br /><em>分享给更多创作者。</em></h1>
-          <p>浏览和分享灵感抽屉节点预设、工作流与创作提示词。带图 JSON 会在上传前自动压缩，提示词可以直接复制使用。</p>
+          <p>浏览和分享灵感抽屉节点预设、工作流、创作提示词与 Markdown 智能体。带图 JSON 会在上传前自动压缩，智能体可下载到 Chat 使用。</p>
           <div className={styles.heroActions}>
             <button onClick={() => setShowSubmit(true)}>＋ 分享灵感</button>
-            <small>投稿审核后公开 · 支持 JSON、提示词与生成效果图</small>
+            <small>投稿审核后公开 · 支持 JSON、Markdown 与生成效果图</small>
           </div>
         </div>
         <div className={styles.heroVisual}>
@@ -442,6 +488,7 @@ export function InspirationSpace() {
               <option value="WORKFLOW">工作流</option>
               <option value="NODE_PRESET">节点预设</option>
               <option value="PROMPT">提示词分享</option>
+              <option value="AGENT">智能体</option>
             </select>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、作者或标签" />
             <button>搜索</button>
@@ -469,7 +516,7 @@ export function InspirationSpace() {
                           loading="lazy"
                         />
                       )
-                    : <div className={styles.emptyCover}><span>JSON</span><small>暂无展示图</small></div>}
+                    : <div className={styles.emptyCover}><span>{item.kind === "AGENT" ? "MD" : "JSON"}</span><small>{item.kind === "AGENT" ? "Chat / 画布智能体" : "暂无展示图"}</small></div>}
                   <em>{SHARE_KIND_LABELS[item.kind]}</em>
                   {previewCount > 1 && (
                     <>
@@ -533,10 +580,10 @@ export function InspirationSpace() {
                     {item.kind !== "PROMPT" && (
                       <a
                         className={styles.downloadLink}
-                        href={`${apiBaseUrl}/v1/inspiration-space/${item.id}/download`}
+                        href={`${apiBaseUrl}/v1/inspiration-space/${item.id}/download${item.kind === "AGENT" ? "?format=markdown" : ""}`}
                         onClick={() => recordDownload(item.id)}
                       >
-                        下载 JSON
+                        {item.kind === "AGENT" ? "下载 .md" : "下载 JSON"}
                         <span className={styles.downloadBadge} title={`已下载 ${item.downloadCount} 次`}>
                           {item.downloadCount}
                         </span>
@@ -559,6 +606,7 @@ export function InspirationSpace() {
             <div className={styles.submitModes} aria-label="分享类型">
               <button type="button" className={submitMode === "JSON" ? styles.activeMode : ""} onClick={() => setSubmitMode("JSON")}>预设 / 工作流</button>
               <button type="button" className={submitMode === "PROMPT" ? styles.activeMode : ""} onClick={() => setSubmitMode("PROMPT")}>提示词分享</button>
+              <button type="button" className={submitMode === "AGENT" ? styles.activeMode : ""} onClick={() => setSubmitMode("AGENT")}>智能体分享</button>
             </div>
             {submitMode === "JSON" ? (
               <label className={styles.fileDrop}>
@@ -568,7 +616,7 @@ export function InspirationSpace() {
                   ? `${SHARE_KIND_LABELS[prepared.kind]} · ${prepared.imageCount} 张内嵌图 · ${(prepared.compressedBytes / 1024).toFixed(0)} KB`
                   : "支持节点预设、工作流模板、带图工作流实例与提示词 JSON"}</small>
               </label>
-            ) : (
+            ) : submitMode === "PROMPT" ? (
               <label className={styles.promptEditor}>
                 <strong>提示词内容</strong>
                 <textarea
@@ -579,6 +627,12 @@ export function InspirationSpace() {
                   placeholder="粘贴完整提示词，保留必要的格式、变量和使用说明…"
                 />
                 <small>{promptText.length.toLocaleString("zh-CN")} / 20,000 字符</small>
+              </label>
+            ) : (
+              <label className={styles.fileDrop} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void prepareAgentFile(file); }}>
+                <input type="file" accept=".md,text/markdown" onChange={event => void selectAgentFile(event)} disabled={busy} />
+                <strong>{agentFileName || "选择或拖入 Markdown 智能体文件"}</strong>
+                <small>支持 SKILL.md；灵感抽屉会在导入时自动分析并适配 Chat / 画布能力</small>
               </label>
             )}
             <div className={styles.formGrid}>
@@ -602,7 +656,7 @@ export function InspirationSpace() {
               </div>
             )}
             {(error || notice || progress) && <div className={error ? styles.error : styles.notice}>{error || progress || notice}</div>}
-            <footer><small>所有投稿默认进入待审核，不会立即公开。</small><button disabled={busy || (submitMode === "JSON" ? !prepared || promptPreviewRequired && extraPreviews.length === 0 : promptText.trim().length < 10 || extraPreviews.length === 0)}>{busy ? progress || "处理中…" : "提交审核"}</button></footer>
+            <footer><small>所有投稿默认进入待审核，不会立即公开。</small><button disabled={busy || (submitMode === "JSON" ? !prepared || promptPreviewRequired && extraPreviews.length === 0 : submitMode === "PROMPT" ? promptText.trim().length < 10 || extraPreviews.length === 0 : !agentMarkdown)}>{busy ? progress || "处理中…" : "提交审核"}</button></footer>
           </form>
         </div>
       )}
