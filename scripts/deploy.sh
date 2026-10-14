@@ -18,7 +18,8 @@ docker network inspect inspiration_backend >/dev/null 2>&1 || {
 
 git pull --ff-only
 source_revision="$(git rev-parse HEAD 2>/dev/null)" || { echo "Cannot resolve the Git revision for the prebuilt image" >&2; exit 1; }
-deployment_image="${WEBSITE_IMAGE:-${WEBSITE_IMAGE_REPOSITORY}:sha-${source_revision}}"
+# Pin the image to the pulled checkout even when the shell inherited an old tag.
+deployment_image="${WEBSITE_IMAGE_REPOSITORY}:sha-${source_revision}"
 export WEBSITE_IMAGE="$deployment_image"
 
 echo "Pulling prebuilt website image: $WEBSITE_IMAGE"
