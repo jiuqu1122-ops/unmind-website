@@ -1,6 +1,6 @@
 export type JsonObject = Record<string, unknown>;
 
-export type AiModelModality = "chat" | "image" | "video";
+export type AiModelModality = "chat" | "image" | "video" | "audio";
 export type AiModelStatus = "DRAFT" | "PUBLISHED" | "RETIRED";
 export type AiRoutingMode = "LEGACY" | "MANAGED";
 export type AiPricingMode = "MANUAL" | "MARKUP";
@@ -192,6 +192,11 @@ const optionalPositiveDuration = (value: unknown, label: string) => (
 );
 
 export function validateCapabilitiesDraft(capabilities: JsonObject) {
+  if (capabilities.supportedQualities !== undefined && (!Array.isArray(capabilities.supportedQualities) || capabilities.supportedQualities.some(item => typeof item !== "string" || !/^[a-zA-Z0-9_-]{1,32}$/.test(item)))) throw new Error("质量档位无效");
+  if (capabilities.qualityParameter !== undefined && (typeof capabilities.qualityParameter !== "string" || !/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(capabilities.qualityParameter) || ["model", "prompt", "n", "size", "images", "image", "__proto__", "constructor", "prototype"].includes(capabilities.qualityParameter))) throw new Error("质量参数名无效");
+  if (capabilities.outputMode !== undefined && !["single_asset", "multiple_assets"].includes(String(capabilities.outputMode))) throw new Error("结果模式无效");
+  if (capabilities.billingMode !== undefined && !["per_request", "per_image"].includes(String(capabilities.billingMode))) throw new Error("计费模式无效");
+  if (capabilities.maxOutputImages !== undefined) validatedNumber(capabilities.maxOutputImages, "maxOutputImages", { integer: true, min: 1, max: 16 });
   const durationModeValue = capabilities.durationMode;
   const durationMode = durationModeValue === undefined ? undefined : String(durationModeValue);
   if (durationMode !== undefined && !["list", "range", "fixed"].includes(durationMode)) {
@@ -337,6 +342,7 @@ export function validatePricingDraft(pricing: JsonObject) {
       }
     });
   };
+  if (pricing.creditsPerImageByResolutionQuality !== undefined) numericObjectValues(pricing.creditsPerImageByResolutionQuality, "creditsPerImageByResolutionQuality", { min: 0, rejectUnsupportedPrice: true });
   visit(pricing);
 }
 
@@ -370,6 +376,7 @@ export function validateCostProfileDraft(costProfile: JsonObject) {
       else visit(item);
     });
   };
+  for (const key of ["cnyPerImageByResolutionQuality", "amountPerImageByResolutionQuality"]) if (costProfile[key] !== undefined) numericObjectValues(costProfile[key], key, { min: 0 });
   visit(costProfile);
   if (costProfile.billingType !== undefined) {
     if (costProfile.billingType !== "video_flat" && costProfile.billingType !== "video_second") {
@@ -557,11 +564,13 @@ export function effectiveDiscoveryModality(discovery: Pick<
 
 export const modalityLabel: Record<AiModelModality, string> = {
   chat: "Chat",
+  audio: "音乐",
   image: "图片",
   video: "视频",
 };
 
 export const billingTypesByModality: Record<AiModelModality, string[]> = {
+  audio: ["music_flat"],
   chat: ["token", "request"],
   image: ["image_resolution", "image_flat", "image_count"],
   video: ["video_second", "video_flat", "video_duration", "video_resolution_duration"],
@@ -861,6 +870,9 @@ const pricingValueRows = (pricing: JsonObject | null) => {
   }
   for (const [resolution, value] of resolutionEntries(pricing.creditsPerImageByResolution)) {
     add(`image.${resolution.toLowerCase()}`, resolution.toUpperCase(), "积分 / 张", value);
+  }
+  for (const [resolution, qualities] of Object.entries(objectValue(pricing.creditsPerImageByResolutionQuality) || {})) {
+    for (const [quality, value] of resolutionEntries(qualities)) add(`image.${resolution}.${quality}`, `${resolution.toUpperCase()} + ${quality}`, "积分", value);
   }
   add("request", "每次请求", "积分 / 次", pricing.creditsPerRequest);
   add("image", "每张图片", "积分 / 张", pricing.creditsPerImage);

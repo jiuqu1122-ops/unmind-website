@@ -373,3 +373,23 @@ test("normalizes video route costs to an explicit per-video or per-second mode",
     amountPerSecond: "0.06",
   }));
 });
+
+test("validates configured image quality, result mode and quality price matrices", () => {
+  validateCapabilitiesDraft({ supportedQualities: ["low", "high", "xhigh", "max"], qualityParameter: "render_quality", outputMode: "multiple_assets", maxOutputImages: 4, billingMode: "per_request" });
+  assert.throws(() => validateCapabilitiesDraft({ supportedQualities: ["high"], qualityParameter: "model" }));
+  assert.throws(() => validateCapabilitiesDraft({ maxOutputImages: 0 }));
+  validatePricingDraft({ billingType: "image_resolution", creditsPerImageByResolution: { "2k": "10" }, creditsPerImageByResolutionQuality: { "2k": { high: "20", max: "40" } } });
+  assert.throws(() => validatePricingDraft({ creditsPerImageByResolutionQuality: { "2k": { high: "-1" } } }));
+  assert.throws(() => validateCostProfileDraft({ cnyPerImageByResolutionQuality: { "2k": { high: "bad" } } }));
+  const rows = priceDiffRows({ billingType: "image_resolution", creditsPerImageByResolutionQuality: { "2k": { high: "20" } } }, { billingType: "image_resolution", creditsPerImageByResolutionQuality: { "2k": { high: "25", max: "40" } } });
+  assert.ok(rows.some(row => row.label === "2K + high" && row.before === 20 && row.after === 25));
+  assert.ok(rows.some(row => row.label === "2K + max" && row.after === 40));
+});
+
+test("exposes editable quality, quality cost and music controls in AI CENTER", async () => {
+  const source = await readFile(new URL("../app/admin/ai-model-center.tsx", import.meta.url), "utf8");
+  for (const field of ["supportedQualities", "qualityParameter", "outputMode", "maxOutputImages", "billingMode", "creditsPerImageByResolutionQuality", "music_flat"]) assert.ok(source.includes(field));
+  assert.ok(source.includes('value="audio"'));
+  assert.ok(source.includes('capabilities={effectiveRouteCapabilities}'));
+  assert.ok(source.includes('selectedBillingType === "music_flat"'));
+});

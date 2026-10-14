@@ -360,7 +360,7 @@ const normalizedPrice = (detail: AdminAiModelDetail, capabilities: JsonObject, p
   if (selectedBillingType === "image_count" && !textValue(cleaned.creditsPerImage)) {
     throw new Error("请填写每张图片售价");
   }
-  if (selectedBillingType === "request" && !textValue(cleaned.creditsPerRequest)) throw new Error("请填写每次请求售价");
+  if ((selectedBillingType === "request" || selectedBillingType === "music_flat") && !textValue(cleaned.creditsPerRequest)) throw new Error("请填写每次请求售价");
   if (selectedBillingType === "video_second") {
     const credits = cleaned.creditsPerSecond ?? cleaned.credits;
     if (!textValue(credits)) throw new Error("请填写每秒视频售价");
@@ -402,7 +402,7 @@ const normalizedPrice = (detail: AdminAiModelDetail, capabilities: JsonObject, p
   return cleaned;
 };
 
-const defaultCapabilities = (modality: AiModelModality): JsonObject => modality === "image" ? {
+const defaultCapabilities = (modality: AiModelModality): JsonObject => modality === "audio" ? { outputAssetType: "audio", billingMode: "per_request" } : modality === "image" ? {
   supportedResolutions: ["2k", "4k"],
   supportedAspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
   minReferenceImages: 0,
@@ -588,6 +588,7 @@ function CapabilitiesEditor({ modality, value, onChange, compact = false }: {
     [supportKey]: supported,
     ...(!supported ? { [minKey]: 0, [maxKey]: 0 } : {}),
   });
+  if (modality === "audio") return <div className={styles.protocolNotice}>输出音频资产，每次请求计费一次。失败或超时不会自动重发。</div>;
   if (modality === "chat") {
     const tiers = Array.isArray(value.contextTiers) ? value.contextTiers.map(objectValue) : [];
     const standard = tiers[0] ?? {};
@@ -623,6 +624,13 @@ function CapabilitiesEditor({ modality, value, onChange, compact = false }: {
   return (
     <div className={styles.structuredForm} data-compact={compact}>
       {modality === "image" ? <>
+        <ToggleChoices label="支持质量" values={["low", "medium", "high", "xhigh", "max"].map(value => ({ value, label: value }))} selected={stringArray(value.supportedQualities)} onChange={(next) => onChange({ ...value, supportedQualities: next, qualityParameter: value.qualityParameter || "quality" })} />
+        <div className={styles.formGrid}>
+          <label><strong>质量参数名</strong><input aria-label="质量参数名" value={String(value.qualityParameter || "quality")} onChange={(event) => update("qualityParameter", event.target.value)} /></label>
+          <label><strong>结果模式</strong><select aria-label="结果模式" value={String(value.outputMode || "single_asset")} onChange={(event) => update("outputMode", event.target.value)}><option value="single_asset">单图片</option><option value="multiple_assets">多图片资产</option></select></label>
+          <label><strong>最大结果图片数</strong><input aria-label="最大结果图片数" type="number" min={1} max={16} value={Number(value.maxOutputImages || 1)} onChange={(event) => update("maxOutputImages", Number(event.target.value))} /></label>
+          <label><strong>图片计费模式</strong><select aria-label="图片计费模式" value={String(value.billingMode || "")} onChange={(event) => update("billingMode", event.target.value || undefined)}><option value="">沿用价格计费方式</option><option value="per_request">每次请求</option><option value="per_image">每张图片</option></select></label>
+        </div>
         <ToggleChoices label="支持分辨率" values={imageResolutions} selected={stringArray(value.supportedResolutions)} onChange={(next) => update("supportedResolutions", next)} />
         <ToggleChoices label="支持比例" values={["1:1", "3:4", "4:3", "9:16", "16:9"].map((item) => ({ value: item, label: item }))} selected={stringArray(value.supportedAspectRatios)} onChange={(next) => update("supportedAspectRatios", next)} />
       </> : <>
@@ -688,6 +696,7 @@ function CapabilitiesEditor({ modality, value, onChange, compact = false }: {
       </div>
       <div className={styles.switchGrid}>
         <SwitchField label="支持参考图" hint="允许上传图片作为输入" checked={Boolean(value.supportsReferenceImage)} onChange={(next) => updateReferenceSupport("supportsReferenceImage", "minReferenceImages", "maxReferenceImages", next)} />
+        {modality === "image" && <SwitchField label="原生图片编辑" hint="关闭时通过生成接口发送参考图" checked={value.supportsImageEdit !== false} onChange={next => update("supportsImageEdit", next)} />}
         {modality === "image" && <SwitchField label="透明背景" hint="允许输出透明 PNG" checked={Boolean(value.supportsTransparentBackground)} onChange={(next) => update("supportsTransparentBackground", next)} />}
         {modality === "video" && <SwitchField label="支持文字提示" hint="允许 text-to-video" checked={value.supportsTextPrompt !== false} onChange={(next) => update("supportsTextPrompt", next)} />}
         {modality === "video" && <SwitchField label="支持参考视频" hint="允许视频参考输入" checked={Boolean(value.supportsReferenceVideo ?? value.supportsVideoReference)} onChange={(next) => updateReferenceSupport("supportsReferenceVideo", "minReferenceVideos", "maxReferenceVideos", next)} />}
@@ -735,7 +744,7 @@ function PricingEditor({ detail, capabilities, value, onChange }: {
   const billingType = detail.modality === "video"
     ? String(value.billingType || detail.billingType)
     : detail.billingType;
-  if (billingType === "request") {
+  if (billingType === "request" || billingType === "music_flat") {
     return <div className={styles.priceForm}><NumericInput label="每次请求" unit="积分 / 次" value={value.creditsPerRequest} onChange={(next) => set(["creditsPerRequest"], next)} /></div>;
   }
   if (billingType === "token") {
@@ -755,11 +764,13 @@ function PricingEditor({ detail, capabilities, value, onChange }: {
   }
   if (detail.modality === "image") {
     const prices = objectValue(value.creditsPerImageByResolution);
+    const qualityResolutions = stringArray(capabilities.supportedResolutions).map(item => item.toLowerCase());
+    const qualityFields = <div className={styles.priceFieldGrid}>{stringArray(capabilities.supportedQualities).flatMap(quality => (qualityResolutions.length ? qualityResolutions : ["2k"]).map(resolution => <NumericInput key={`${resolution}:${quality}`} label={`${resolution.toUpperCase()} + ${quality}`} unit="积分" value={getPath(value, ["creditsPerImageByResolutionQuality", resolution, quality])} onChange={next => set(["creditsPerImageByResolutionQuality", resolution, quality], next)} />))}</div>;
     if (billingType === "image_flat") {
-      return <div className={styles.priceForm}><NumericInput label="每次图片请求" unit="积分 / 次" value={value.creditsPerRequest} onChange={(next) => set(["creditsPerRequest"], next)} /></div>;
+      return <div className={styles.priceForm}><NumericInput label="每次图片请求" unit="积分 / 次" value={value.creditsPerRequest} onChange={(next) => set(["creditsPerRequest"], next)} />{qualityFields}</div>;
     }
     if (billingType === "image_count") {
-      return <div className={styles.priceForm}><NumericInput label="每张图片" unit="积分 / 张" value={value.creditsPerImage} onChange={(next) => set(["creditsPerImage"], next)} /></div>;
+      return <div className={styles.priceForm}><NumericInput label="每张图片" unit="积分 / 张" value={value.creditsPerImage} onChange={(next) => set(["creditsPerImage"], next)} />{qualityFields}</div>;
     }
     const supported = stringArray(capabilities.supportedResolutions).map((item) => item.toLowerCase());
     const effectiveSupported = supported.length ? supported : Object.keys(prices).length ? Object.keys(prices) : ["2k", "4k"];
@@ -767,6 +778,7 @@ function PricingEditor({ detail, capabilities, value, onChange }: {
     return (
       <div className={styles.priceForm}>
         <div className={styles.priceFieldGrid}>
+          {stringArray(capabilities.supportedQualities).flatMap(quality => effectiveSupported.map(resolution => <NumericInput key={`${resolution}:${quality}`} label={`${resolution.toUpperCase()} + ${quality}`} unit="积分" value={getPath(value, ["creditsPerImageByResolutionQuality", resolution, quality])} onChange={next => set(["creditsPerImageByResolutionQuality", resolution, quality], next)} />))}
           {resolutions.map((resolution) => <NumericInput key={resolution} label={resolution.toUpperCase()} unit="积分 / 张" value={prices[resolution]} disabled={!effectiveSupported.includes(resolution)} onChange={(next) => set(["creditsPerImageByResolution", resolution], next)} />)}
         </div>
       </div>
@@ -834,12 +846,14 @@ function PricingEditor({ detail, capabilities, value, onChange }: {
   );
 }
 
-function CostEditor({ modality, value, onChange }: {
+function CostEditor({ modality, value, onChange, capabilities = {} }: {
+  capabilities?: JsonObject;
   modality: AiModelModality;
   value: JsonObject;
   onChange: (next: JsonObject) => void;
 }) {
   const set = (path: string[], next: string) => onChange(setPath(value, path, next));
+  if (modality === "audio") return <NumericInput label="音乐请求成本" unit="元 / 次" value={value.cnyPerRequest} onChange={next => set(["cnyPerRequest"], next)} />;
   if (modality === "chat") {
     return <div className={styles.costForm}><div className={styles.priceFieldGrid}>{[
       ["upstreamInputCnyPer1m", "输入"],
@@ -856,6 +870,7 @@ function CostEditor({ modality, value, onChange }: {
     return <div className={styles.costForm}>
       <label><strong>成本币种</strong><select value={currency} onChange={(event) => onChange({ ...value, currency: event.target.value })}><option value="CNY">CNY</option><option value="USD">USD</option></select></label>
       <div className={styles.priceFieldGrid}>{["1k", "2k", "4k"].map((item) => <NumericInput key={item} label={item.toUpperCase()} unit={unit} value={prices[item]} onChange={(next) => set([mapKey, item], next)} />)}</div>
+      <div className={styles.priceFieldGrid}>{stringArray(capabilities.supportedQualities).flatMap(quality => stringArray(capabilities.supportedResolutions).map(resolution => <NumericInput key={`${resolution}:${quality}`} label={`${resolution.toUpperCase()} + ${quality}`} unit={unit} value={getPath(value, [`${mapKey}Quality`, resolution.toLowerCase(), quality])} onChange={next => set([`${mapKey}Quality`, resolution.toLowerCase(), quality], next)} />))}</div>
       {currency === "USD" && <div className={styles.protocolNotice}>USD 成本按原币种保存；系统不会按猜测汇率改写历史人民币成本。</div>}
     </div>;
     return <div className={styles.costForm}><div className={styles.priceFieldGrid}>{["1k", "2k", "4k"].map((item) => <NumericInput key={item} label={item.toUpperCase()} unit="元 / 张" value={prices[item]} onChange={(next) => set(["cnyPerImageByResolution", item], next)} />)}</div></div>;
@@ -1734,7 +1749,7 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
 
       <section className={styles.modelCommandBar}>
         <nav aria-label="模型类型">
-          {(["all", "chat", "image", "video", "usage", "unmapped"] as const).map((item) => (
+          {(["all", "chat", "image", "video", "audio", "usage", "unmapped"] as const).map((item) => (
             <button key={item} type="button" data-active={view === item} onClick={() => changeView(item)}>{item === "all" ? "全部" : item === "usage" ? "任务模型" : item === "unmapped" ? `未映射 ${unmapped.length}` : modalityLabel[item]}</button>
           ))}
         </nav>
@@ -1784,14 +1799,14 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
               const compatible = modality ? models.filter((model) => model.modality === modality) : [];
               return <article key={discovery.id}>
                 <div className={styles.discoveryIdentity}><strong>{discovery.upstreamModelId}</strong><small>{discovery.channel.name} · {discovery.provider}</small></div>
-                <label className={styles.discoveryModality}><span>类型</span><select aria-label={`类型 ${discovery.upstreamModelId}`} disabled={busy} value={modality ?? ""} onChange={(event) => void updateDiscoveryModality(discovery, event.target.value)}><option value="">待确认</option><option value="chat">Chat</option><option value="image">图片</option><option value="video">视频</option></select>{discovery.modalityOverride && <small>人工覆盖</small>}</label>
+                <label className={styles.discoveryModality}><span>类型</span><select aria-label={`类型 ${discovery.upstreamModelId}`} disabled={busy} value={modality ?? ""} onChange={(event) => void updateDiscoveryModality(discovery, event.target.value)}><option value="">待确认</option><option value="chat">Chat</option><option value="image">图片</option><option value="video">视频</option><option value="audio">音乐</option></select>{discovery.modalityOverride && <small>人工覆盖</small>}</label>
                 <span>{discoveryCapabilitySummary(discovery)}</span>
                 <span>{costSummary(discovery.discoveredCost)}</span>
                 <span>{formatDateTime(discovery.lastSyncedAt)}</span>
                 <div className={styles.discoveryActions}><select aria-label={`映射 ${discovery.upstreamModelId}`} value={mappingTargets[discovery.id] ?? ""} onChange={(event) => setMappingTargets((current) => ({ ...current, [discovery.id]: event.target.value }))}><option value="">{modality ? "选择已有模型" : "请先选择类型"}</option>{compatible.map((model) => <option key={model.id} value={model.canonicalModelKey}>{model.displayName}</option>)}</select><button type="button" disabled={busy || !modality || !mappingTargets[discovery.id]} onClick={() => void mapDiscovery(discovery)}>映射</button><button type="button" className={styles.ghost} onClick={() => setExpandedCreate(expandedCreate === discovery.id ? "" : discovery.id)}>创建新模型</button><button type="button" className={styles.textDanger} onClick={() => ignoreDiscovery(discovery)}>忽略</button></div>
                 {expandedCreate === discovery.id && <form className={styles.createModelPanel} onSubmit={(event) => void createCanonical(event, discovery)}>
                   <header><div><strong>创建并映射新模型</strong><small>信息已根据上游检测结果预填</small></div><button type="button" className={styles.ghost} onClick={() => setExpandedCreate("")}>关闭</button></header>
-                  <div className={styles.formGrid}><label><strong>显示名称</strong><input required value={draft.displayName} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, displayName: event.target.value } }))} /></label><label><strong>客户端模型 ID</strong><input required value={draft.canonicalModelKey} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, canonicalModelKey: canonicalKeyDraft(event.target.value) } }))} /></label><label><strong>类型</strong><select value={draft.modality} disabled><option value="">请先在列表中选择</option>{(["chat", "image", "video"] as const).map((item) => <option key={item} value={item}>{modalityLabel[item]}</option>)}</select></label><label><strong>计费方式</strong><select disabled={!draft.modality} value={draft.billingType} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, billingType: event.target.value } }))}>{draft.modality && billingTypesByModality[draft.modality].map((item) => <option key={item} value={item}>{item === "token" ? "按 Token" : item === "request" ? "按次" : item.includes("resolution") ? "按分辨率" : item.includes("second") ? "按秒" : "固定价格"}</option>)}</select></label></div>
+                  <div className={styles.formGrid}><label><strong>显示名称</strong><input required value={draft.displayName} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, displayName: event.target.value } }))} /></label><label><strong>客户端模型 ID</strong><input required value={draft.canonicalModelKey} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, canonicalModelKey: canonicalKeyDraft(event.target.value) } }))} /></label><label><strong>类型</strong><select value={draft.modality} disabled><option value="">请先在列表中选择</option>{(["chat", "image", "video", "audio"] as const).map((item) => <option key={item} value={item}>{modalityLabel[item]}</option>)}</select></label><label><strong>计费方式</strong><select disabled={!draft.modality} value={draft.billingType} onChange={(event) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, billingType: event.target.value } }))}>{draft.modality && billingTypesByModality[draft.modality].map((item) => <option key={item} value={item}>{item === "token" ? "按 Token" : item === "request" ? "按次" : item.includes("resolution") ? "按分辨率" : item.includes("second") ? "按秒" : "固定价格"}</option>)}</select></label></div>
                   <div className={styles.switchGrid}><SwitchField label="用户可见" hint="创建后出现在客户端列表" checked={draft.visible} onChange={(visible) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, visible } }))} /><SwitchField label="允许调用" hint="服务器接受新请求" checked={draft.enabled} onChange={(enabled) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, enabled } }))} /></div>
                   {draft.modality ? <CapabilitiesEditor modality={draft.modality} value={draft.capabilities} onChange={(next) => setCreateDrafts((current) => ({ ...current, [discovery.id]: { ...draft, capabilities: next } }))} compact /> : <p className={styles.inlineWarning}>请先在未映射列表中明确选择模型类型。</p>}
                   <footer><p>新 Route 会默认保持停用，确认成本与能力后再启用。</p><button disabled={busy || !draft.modality}>{busy ? "正在创建…" : "创建并映射"}</button></footer>
@@ -1859,7 +1874,7 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
                     || Number(effectiveRouteCapabilities.maxReferenceImages ?? 0) > 0,
                   );
                   const inferredModality = route.metadata?.inferredModality;
-                  const modalityMismatch = (inferredModality === "chat" || inferredModality === "image" || inferredModality === "video")
+                  const modalityMismatch = (inferredModality === "chat" || inferredModality === "image" || inferredModality === "video" || inferredModality === "audio")
                     && inferredModality !== detail.modality;
                   return <article key={route.id}>
                     <header><div><strong>{route.channel?.name ?? route.provider}</strong><small>上游模型：{route.upstreamModelId}</small>{detail.modality === "image" && <div className={styles.routeProtocolBadges}><code>{route.adapterKey || "LEGACY"}</code><span data-mode={imageRouteExecutionMode(route.executionMode)}>{imageRouteExecutionMode(route.executionMode) === "TASK" ? "异步任务" : imageRouteExecutionMode(route.executionMode) === "DIRECT" ? "直返" : "继承默认"}</span></div>}</div><span data-ok={operationalRoute(route)}>● {routeState(route)}</span></header>
@@ -1868,7 +1883,7 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
                     <details className={styles.routeCostEditor}>
                       <summary>编辑渠道成本与能力</summary>
                       <label><strong>优先级</strong><input type="number" min={0} value={routeDraft.priority} onChange={(event) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, priority: event.target.value } }))} /></label>
-                      <CostEditor modality={detail.modality} value={routeDraft.costProfile} onChange={(costProfile) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, costProfile } }))} />
+                      <CostEditor capabilities={effectiveRouteCapabilities} modality={detail.modality} value={routeDraft.costProfile} onChange={(costProfile) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, costProfile } }))} />
                       {detail.modality === "image" && <ImageAdapterEditor
                         routeId={route.id}
                         value={routeDraft}
