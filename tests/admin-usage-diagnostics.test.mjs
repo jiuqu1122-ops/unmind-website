@@ -24,6 +24,8 @@ test('partial failures and refunded requests have accurate status labels', () =>
   assert.equal(model.usageErrorStatus({ status: 'SUCCEEDED', failedOutputCount: 1 }), '部分输出失败');
   assert.equal(model.usageErrorStatus({ status: 'REFUNDED', failedOutputCount: 0 }), '已退款');
   assert.match(model.usageErrorStatus({ status: 'PROCESSING', failedOutputCount: 1 }), /处理中/);
+  assert.equal(model.usageErrorStatus({ status: 'PROCESSING', failedOutputCount: 0, recovery: { state: 'manual_confirmation_required' } }), '结果待恢复 · 积分预留');
+  assert.equal(model.usageStageLabel('request_recovery'), '原任务结果恢复');
 });
 test('error search and cursor are URL encoded, not concatenated raw', () => {
   const url = model.usageErrorQuery({ days: 7, kind: 'image', query: 'x&limit=999', cursor: 'abc', snapshotAt: '2026-09-22T01:00:00Z' });

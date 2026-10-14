@@ -9,6 +9,7 @@ export type UsageErrorItem = {
   modelKey: string; modelName: string; channelName: string | null; upstreamModel: string | null;
   user: { id: string; email: string | null; displayName: string | null };
   createdAt: string; completedAt: string | null; durationMs: number | null; failedOutputCount: number;
+  recovery?: { state: string; reason: string; stage: string; taskId: string | null };
   diagnostic: null | {
     version: 1; code: string; message: string; stage: string; httpStatus: number | null;
     causeCode: string | null; recordedAt: string; resolution: string | null;
@@ -34,7 +35,8 @@ export function selectedImageTiming(metrics: UsageMetrics | null, key: string): 
     ?? { samples: 0, missingSamples: 0, averageMs: null };
 }
 
-export function usageErrorStatus(item: Pick<UsageErrorItem, 'status' | 'failedOutputCount'>) {
+export function usageErrorStatus(item: Pick<UsageErrorItem, 'status' | 'failedOutputCount' | 'recovery'>) {
+  if (item.status === 'PROCESSING' && item.recovery?.state === 'manual_confirmation_required') return '结果待恢复 · 积分预留';
   if (item.status === 'REFUNDED') return '已退款';
   if (item.status === 'FAILED') return '失败';
   if (item.failedOutputCount > 0) return item.status === 'SUCCEEDED' ? '部分输出失败' : '处理中 · 已有失败输出';
@@ -44,6 +46,7 @@ export function usageErrorStatus(item: Pick<UsageErrorItem, 'status' | 'failedOu
 const STAGE_LABELS: Record<string, string> = {
   image_generation: '图片请求', text_request: '文字/识图请求',
   video_task: '视频任务', result_persistence: '结果下载/保存',
+  request_recovery: '原任务结果恢复',
 };
 export const usageStageLabel = (stage?: string) => STAGE_LABELS[stage || ''] || '未记录';
 

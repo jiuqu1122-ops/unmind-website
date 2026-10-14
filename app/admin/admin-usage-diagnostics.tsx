@@ -83,7 +83,7 @@ export function AdminUsageDiagnostics({ days, imageModel, refreshKey, request }:
         <article><span>生图平均耗时</span><strong>{metricsLoading ? '加载中…' : formatUsageDuration(imageTiming?.averageMs)}</strong><small>{imageModel === 'all' ? '全部生图模型' : '上方所选生图模型'} · 每次成功请求</small><small>{sampleLabel(imageTiming)}</small></article>
         <article><span>文字 / 识图平均耗时</span><strong>{metricsLoading ? '加载中…' : formatUsageDuration(metrics?.text.averageMs)}</strong><small>全部文字与识图模型 · 每次成功请求</small><small>{sampleLabel(metrics?.text ?? null)}</small></article>
         <article><span>视频平均耗时</span><strong>{metricsLoading ? '加载中…' : formatUsageDuration(metrics?.video.averageMs)}</strong><small>有任务记录的视频 · 每条成功输出</small><small>{sampleLabel(metrics?.video ?? null)}</small></article>
-        <article className={styles.failureMetric}><span>失败 / 异常请求</span><strong>{errorsLoading ? '加载中…' : errors ? errors.total.toLocaleString('zh-CN') : '—'}</strong><small>按下方类型与搜索条件 · 每请求一条</small><small>包含已退款和视频部分输出失败</small></article>
+        <article className={styles.failureMetric}><span>失败 / 异常请求</span><strong>{errorsLoading ? '加载中…' : errors ? errors.total.toLocaleString('zh-CN') : '—'}</strong><small>按下方类型与搜索条件 · 每请求一条</small><small>包含待恢复、已退款和视频部分输出失败</small></article>
       </div>
       {!metricsLoading && metricsResource.error && <p className={styles.error} role="alert">{metricsResource.error}</p>}
       <p className={styles.note}>耗时为服务端记录的创建至完成时间，包含排队、重试与结果保存，不是渠道纯推理时间。失败、未完成及缺失时间不按 0 秒计入成功平均值；一请求多图仍算一个样本。旧视频只有受理记录时不纳入视频平均耗时。</p>
@@ -93,7 +93,7 @@ export function AdminUsageDiagnostics({ days, imageModel, refreshKey, request }:
           {visibleModels.map(model => <tr key={`${model.modality}:${model.key}`}><td><strong>{model.displayName}</strong><small>{model.key}</small></td><td>{model.modality === 'image' ? '图片 / 请求' : model.modality === 'video' ? '视频 / 输出任务' : '文字 / 请求'}</td><td>{formatUsageDuration(model.averageMs)}</td><td>{model.samples}</td><td>{model.missingSamples}</td></tr>)}
         </tbody></table>{!metricsLoading && metrics && !visibleModels.length && <p className={styles.empty}>当前范围暂无成功样本</p>}</div>
       </details>
-      <div className={styles.errorHeading}><h4>错误记录</h4><small>只展示失败、退款或部分输出失败，不把处理中误判为失败</small></div>
+      <div className={styles.errorHeading}><h4>异常记录</h4><small>包含失败、退款、部分输出失败及结果待恢复；待恢复积分仍预留</small></div>
       <form className={styles.filters} onSubmit={onSearch}>
         <label><span>请求类型</span><select value={kind} onChange={event => setKind(event.target.value)}><option value="all">全部类型</option><option value="image">图片</option><option value="text">文字 / 识图</option><option value="video">视频</option></select></label>
         <label className={styles.search}><span>搜索记录</span><input value={searchInput} onChange={event => setSearchInput(event.target.value)} maxLength={128} placeholder="用户、邮箱、模型或请求 ID" /></label>
@@ -115,6 +115,7 @@ export function AdminUsageDiagnostics({ days, imageModel, refreshKey, request }:
                 <dt>模型标识</dt><dd>{item.modelKey}</dd><dt>关联 Route 上游模型</dt><dd>{item.upstreamModel || '未记录'}</dd>
                 <dt>错误码</dt><dd>{item.diagnostic?.code || '未记录'}</dd><dt>底层错误码</dt><dd>{item.diagnostic?.causeCode || '未记录'}</dd>
                 <dt>请求清晰度</dt><dd>{item.diagnostic?.resolution || '未记录'}</dd><dt>记录完成时间</dt><dd>{item.completedAt ? time(item.completedAt) : '尚未完成'}</dd>
+                {item.recovery && <><dt>渠道任务 ID</dt><dd>{item.recovery.taskId || '未记录'}</dd><dt>恢复阶段 / 原因</dt><dd>{item.recovery.stage} / {item.recovery.reason}</dd></>}
                 {item.failedOutputCount > 0 && <><dt>失败视频输出</dt><dd>{item.failedOutputCount} 条</dd></>}
               </dl><button type="button" onClick={() => void copy(item.clientRequestId)}>复制客户端请求 ID</button></details>
             </td>
