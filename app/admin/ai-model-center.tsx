@@ -10,6 +10,10 @@ import {
   formatJson,
   humanModelStatus,
   imageRouteExecutionMode,
+  imageAdapterConfigWithRequestParametersDraft,
+  imageOperationPriceDraftFor,
+  imageTaskOperations,
+  imageTaskSpeeds,
   imageTaskExecutionConfigFor,
   isModelCenterUnavailable,
   isUnsupportedPrice,
@@ -26,6 +30,8 @@ import {
   validateCapabilitiesDraft,
   validateCostProfileDraft,
   validateImageRouteExecutionDraft,
+  validateImageTaskOperationsDraft,
+  validateImageOperationPrices,
   validatePricingDraft,
   resolveVideoCostBillingType,
   videoBillingTypeOptions,
@@ -40,7 +46,7 @@ import {
   type AiUpstreamDiscovery,
   type CapabilityOptionKind,
   type ImageRouteExecutionMode,
-  type ImageReferenceConfig,
+  type ImageAdapterConfig,
   type JsonObject,
   type VideoBillingType,
 } from "./ai-model-center-model";
@@ -65,7 +71,8 @@ type RouteDraft = {
   costProfile: JsonObject;
   capabilitiesOverride: JsonObject | null;
   adapterKey: string;
-  adapterConfig: (JsonObject & ImageReferenceConfig) | null;
+  adapterConfig: ImageAdapterConfig | null;
+  requestParametersDraft?: string;
   executionMode: ImageRouteExecutionMode;
   executionConfig: JsonObject | null;
 };
@@ -231,6 +238,7 @@ const formatCurrency = (value: number) => new Intl.NumberFormat("zh-CN", {
 }).format(value);
 
 const stripUnsupportedPriceValues = (value: unknown, key = ""): unknown => {
+  if (key === "creditsPerOperation") return value;
   if (Array.isArray(value)) return value.map((item) => stripUnsupportedPriceValues(item, key));
   if (!value || typeof value !== "object") {
     return /credits/i.test(key) && isUnsupportedPrice(value) ? "" : value;
@@ -337,6 +345,7 @@ const normalizedPrice = (detail: AdminAiModelDetail, capabilities: JsonObject, p
   const selectedPricing = detail.modality === "video"
     ? videoPricingDraftForBillingType(pricing, selectedBillingType as VideoBillingType)
     : { ...pricing, billingType: selectedBillingType };
+  if (selectedPricing.creditsPerOperation !== undefined) validateImageOperationPrices(selectedPricing.creditsPerOperation);
   const cleaned = withoutBlankValues(selectedPricing) as JsonObject;
   validatePricingDraft(cleaned);
   if (selectedBillingType === "token") {
@@ -735,7 +744,7 @@ function NumericInput({ label, unit, value, onChange, disabled = false }: {
   );
 }
 
-function PricingEditor({ detail, capabilities, value, onChange }: {
+export function PricingEditor({ detail, capabilities, value, onChange }: {
   detail: AdminAiModelDetail;
   capabilities: JsonObject;
   value: JsonObject;
@@ -768,7 +777,23 @@ function PricingEditor({ detail, capabilities, value, onChange }: {
     const qualityResolutions = stringArray(capabilities.supportedResolutions).map(item => item.toLowerCase());
     const qualityFields = <div className={styles.priceFieldGrid}>{stringArray(capabilities.supportedQualities).flatMap(quality => (qualityResolutions.length ? qualityResolutions : ["2k"]).map(resolution => <NumericInput key={`${resolution}:${quality}`} label={`${resolution.toUpperCase()} + ${quality}`} unit="积分" value={getPath(value, ["creditsPerImageByResolutionQuality", resolution, quality])} onChange={next => set(["creditsPerImageByResolutionQuality", resolution, quality], next)} />))}</div>;
     if (billingType === "image_flat") {
-      return <div className={styles.priceForm}><NumericInput label="每次图片请求" unit="积分 / 次" value={value.creditsPerRequest} onChange={(next) => set(["creditsPerRequest"], next)} />{qualityFields}</div>;
+      return <div className={styles.priceForm}>
+        <NumericInput label="每次图片请求" unit="积分 / 次" value={value.creditsPerRequest} onChange={(next) => set(["creditsPerRequest"], next)} />{qualityFields}
+        <details>
+          <summary>操作与速度定价（可选）</summary>
+          <p>任务后续操作仅开放已填写价格的操作与速度；留空表示未开通，不使用基础价格。0 表示明确免费。填写后保存为待发布并发布才会生效。</p>
+          {imageTaskOperations.map(operation => <section key={operation}>
+            <header><strong>{operation}</strong></header>
+            <div className={styles.priceFieldGrid}>{imageTaskSpeeds.map(speed => <label key={speed} className={styles.numberField}>
+              <strong>{speed}</strong>
+              <div><input aria-label={`操作售价 ${operation} ${speed}`} inputMode="decimal" placeholder="未开通"
+                value={typeof getPath(value, ["creditsPerOperation", operation, speed]) === "string"
+                  ? getPath(value, ["creditsPerOperation", operation, speed]) as string : ""}
+                onChange={event => onChange(imageOperationPriceDraftFor(value, operation, speed, event.target.value))} /><small>积分 / 次</small></div>
+            </label>)}</div>
+          </section>)}
+        </details>
+      </div>;
     }
     if (billingType === "image_count") {
       return <div className={styles.priceForm}><NumericInput label="每张图片" unit="积分 / 张" value={value.creditsPerImage} onChange={(next) => set(["creditsPerImage"], next)} />{qualityFields}</div>;
@@ -957,6 +982,18 @@ export function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, 
     || value.adapterKey === "GROK_IMAGES_API"
     || value.adapterKey === "GENERIC_OPENAI_IMAGE";
   const referenceSerializer = String(config?.referenceSerializer ?? "");
+  const requestParametersText = value.requestParametersDraft
+    ?? (config?.requestParameters === undefined ? "" : formatJson(config.requestParameters));
+  let requestParametersError = "";
+  if (value.adapterKey === "GENERIC_OPENAI_IMAGE") {
+    try {
+      const prepared = imageAdapterConfigWithRequestParametersDraft(value.adapterKey, config, value.requestParametersDraft);
+      if (prepared) validateAdapterConfigDraft(prepared, value.adapterKey);
+      validateImageTaskOperationsDraft(value.adapterKey, executionMode, prepared, executionConfig);
+    } catch (reason) {
+      requestParametersError = reasonMessage(reason, "固定请求参数无效");
+    }
+  }
   return (
     <div className={styles.structuredForm}>
       <label>
@@ -969,6 +1006,7 @@ export function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, 
             onChange({
               ...value,
               adapterKey,
+              requestParametersDraft: undefined,
               adapterConfig: imageAdapterConfigFor(adapterKey, null),
             });
           }}
@@ -1029,8 +1067,41 @@ export function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, 
             </>}
           </>}
         </div>
+        {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <>
+          <label className={styles.jsonEditor}>
+            <strong>固定请求参数</strong>
+            <textarea aria-label="固定请求参数" aria-invalid={Boolean(requestParametersError)} rows={5}
+              placeholder={'{"operation":"imagine","speed":"fast","n":1}'}
+              value={requestParametersText}
+              onChange={(event) => onChange({ ...value, requestParametersDraft: event.target.value })} />
+            <small>仅此 Generic 路由生效，文生图与参考图请求共用。V8.2 示例：{"{\"operation\":\"imagine\",\"speed\":\"fast\",\"n\":1}"}。只允许字符串、数字和布尔值；尺寸、质量及图片等协议字段不可覆盖。空白或 {"{}"} 清除配置；固定 n 必须与客户端请求数量一致。</small>
+            {requestParametersError && <span role="alert">{requestParametersError}</span>}
+          </label>
+          <label className={styles.inlineCheck}>
+            <input type="checkbox" aria-label="按原请求编号生成 Idempotency-Key"
+              checked={config.idempotencyHeader === "Idempotency-Key"}
+              onChange={(event) => setConfig("idempotencyHeader", event.target.checked ? "Idempotency-Key" : undefined)} />
+            按原请求编号生成 Idempotency-Key
+          </label>
+          <label className={styles.inlineCheck}>
+            <input type="checkbox" aria-label="保留任务与按钮信息（供后续操作使用）"
+              checked={config.preserveTaskMetadata === true}
+              onChange={(event) => setConfig("preserveTaskMetadata", event.target.checked ? true : undefined)} />
+            保留任务与按钮信息（供后续操作使用）
+          </label>
+          <small>仅保留信息，不触发额外操作或计费。</small>
+          {(executionMode === "TASK" && taskProfile === "GENERIC_TASK" || config.enableTaskOperations === true) && <>
+            <label className={styles.inlineCheck}>
+              <input type="checkbox" aria-label="开放任务后续操作接口"
+                checked={config.enableTaskOperations === true}
+                onChange={(event) => setConfig("enableTaskOperations", event.target.checked ? true : undefined)} />
+              开放任务后续操作接口
+            </label>
+            <small>需配置 Generic Task、保留任务信息、Idempotency-Key，以及固定 operation=imagine、speed 和 n=1。开放接口不会自动执行操作；用户调用时按已发布的操作与速度价格计费。</small>
+          </>}
+        </>}
         {value.adapterKey === "GENERIC_OPENAI_IMAGE" && supportsReferenceImages && !referenceSerializer && <div className={styles.inlineProtocolWarning}>该 Route 支持参考图，但尚未确认参考图序列化字段。</div>}
-        {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <div className={styles.protocolNotice}>以上 n 和 response_format 仅在请求含参考图时按显式配置发送，不改变文生图请求。Data URL 仅在渠道文档确认支持时启用；未设置时保留现有传输方式。配置 n=1 时客户端需选择 1 组，不会自动改写请求数量。</div>}
+        {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <div className={styles.protocolNotice}>“参考图请求数量”和“参考图返回格式”仅在请求含参考图时生效；固定请求参数会同时用于文生图和参考图请求。Data URL 仅在渠道文档确认支持时启用；未设置时保留现有传输方式。配置 n=1 时客户端需选择 1 组，不会自动改写请求数量。</div>}
         {config.resolutionValueMode === "exact" && <details><summary>配置 exact dimension mapping</summary><p>只会发送这里明确填写的像素值；未配置的分辨率与比例组合会停止请求，不会猜测尺寸。</p><div className={styles.formGrid}>{["1K", "2K", "4K"].flatMap((resolution) => ["1:1", "16:9", "9:16", "3:2", "2:3", "4:3", "3:4"].map((aspectRatio) => <label key={`${resolution}:${aspectRatio}`}><strong>{resolution} · {aspectRatio}</strong><input aria-label={`${resolution} ${aspectRatio} exact dimension`} placeholder="例如 1672x941" value={String(objectValue(objectValue(config.exactDimensions)[resolution])[aspectRatio] ?? "")} onChange={(event) => setExactDimension(resolution, aspectRatio, event.target.value)} /></label>))}</div></details>}
         <details className={styles.adapterAdvanced}><summary>协议高级 JSON（只读）</summary><pre>{formatJson(config)}</pre></details>
       </>)}
@@ -1399,32 +1470,38 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
     const capabilitiesChanged = JSON.stringify(capabilitiesOverride)
       !== JSON.stringify(route.capabilitiesOverride);
     const adapterKey = draft.adapterKey || null;
-    const adapterConfig = draft.adapterConfig === null
-      ? null
-      : withoutBlankValues(draft.adapterConfig) as JsonObject;
+    let adapterConfig: JsonObject | null = null;
     const executionMode = imageRouteExecutionMode(draft.executionMode);
     const executionConfig = draft.executionConfig === null
       ? null
       : withoutBlankValues(draft.executionConfig) as JsonObject;
     const adapterChanged = detail?.modality !== "chat"
       && adapterKey !== (route.adapterKey ?? null);
-    const adapterConfigChanged = detail?.modality !== "chat"
-      && JSON.stringify(adapterConfig) !== JSON.stringify(route.adapterConfig ?? null);
     const executionModeChanged = detail?.modality === "image"
       && executionMode !== imageRouteExecutionMode(route.executionMode);
     const executionConfigChanged = detail?.modality === "image"
       && JSON.stringify(executionConfig) !== JSON.stringify(route.executionConfig ?? null);
     try {
+      const preparedAdapterConfig = imageAdapterConfigWithRequestParametersDraft(
+        draft.adapterKey, draft.adapterConfig, draft.requestParametersDraft,
+      );
+      adapterConfig = preparedAdapterConfig === null ? null : withoutBlankValues(preparedAdapterConfig) as JsonObject;
+      if (adapterConfig && preparedAdapterConfig?.requestParameters !== undefined) {
+        adapterConfig.requestParameters = preparedAdapterConfig.requestParameters;
+      }
       validateCostProfileDraft(costProfile);
       if (capabilitiesOverride) validateCapabilitiesDraft(capabilitiesOverride);
-      if (adapterConfig) validateAdapterConfigDraft(adapterConfig);
+      if (adapterConfig) validateAdapterConfigDraft(adapterConfig, draft.adapterKey);
       if (detail?.modality === "image") {
         validateImageRouteExecutionDraft(executionMode, executionConfig);
+        validateImageTaskOperationsDraft(draft.adapterKey, executionMode, adapterConfig, executionConfig);
       }
     } catch (reason) {
       onError(reasonMessage(reason, "上游成本格式错误"));
       return false;
     }
+    const adapterConfigChanged = detail?.modality !== "chat"
+      && JSON.stringify(adapterConfig) !== JSON.stringify(route.adapterConfig ?? null);
     const operation = () => request(`/v1/admin/ai-models/routes/${encodeURIComponent(route.id)}`, {
       method: "PATCH",
       body: JSON.stringify({
@@ -1867,7 +1944,7 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
                 <div className={styles.priceOverviewV2}><article><small>当前生效价格</small><strong>{priceSummary(currentPrice)}</strong><span>V{detail.pricing?.currentVersion?.version ?? "-"} · {formatDateTime(detail.pricing?.currentVersion?.publishedAt)}</span></article><article><small>上游采购成本</small><strong>{costSummary(selectedCost)}</strong><span>{selectedSummary?.currentRoute?.channel?.name ?? "最低可用成本"}</span></article><article><small>默认渠道毛利</small><strong>{currentMargin ? `${formatCurrency(currentMargin.profitCny)} 元 · ${formatMargin(currentMargin.marginPercent)}` : "待计算"}</strong><span>{currentMargin ? `${currentMargin.sellPoints} 积分 = ¥${formatCurrency(currentMargin.sellCny)}，成本 ¥${formatCurrency(currentMargin.costCny)}` : "需要同时具备售价与成本"}</span></article><article><small>根据成本计算的建议价格</small><strong>{priceSummary(detail.pricing?.suggestedPrice ?? null)}</strong><span>仅供运营采用，不会自动改变用户售价</span></article></div>
                 <PricingEditor detail={detail} capabilities={capabilities} value={pricing} onChange={setPricing} />
                 <div className={styles.pricingPolicyV2}><label><strong>定价方式</strong><select value={pricingMode} onChange={(event) => setPricingMode(event.target.value as "MANUAL" | "MARKUP")}><option value="MANUAL">人工定价</option><option value="MARKUP">按成本给出建议</option></select></label>{pricingMode === "MARKUP" && <label><strong>成本加价倍数</strong><input inputMode="decimal" value={markupMultiplier} onChange={(event) => setMarkupMultiplier(event.target.value)} /><small>1.32 表示售价为成本的 1.32 倍</small></label>}<button type="button" className={styles.ghost} disabled={busy} onClick={() => void savePricingPolicy()}>保存定价策略</button>{detail.pricing?.suggestedPrice && <button type="button" className={styles.ghost} onClick={() => setPricing(cloneObject(detail.pricing?.suggestedPrice))}>采用成本建议</button>}</div>
-                {detail.pricing?.pendingPrice && <div className={styles.priceDiffPanel}><header><div><strong>有未发布价格修改</strong><small>当前生效价格不会在发布前改变</small></div><span>V{detail.pricing.currentVersion?.version ?? 0} → V{(detail.pricing.currentVersion?.version ?? 0) + 1}</span></header><div>{pendingDiff.map((row) => <article key={row.key}><span>{row.label}</span><b>{row.before ?? "未设置"} → {row.after ?? "不支持"}</b><small>{row.after !== null && row.before !== null ? `${row.after - row.before >= 0 ? "+" : ""}${row.after - row.before} ${row.unit}${row.before ? ` · ${(((row.after - row.before) / row.before) * 100).toFixed(1)}%` : ""}` : row.unit}</small></article>)}</div><footer><button type="button" className={styles.textDanger} onClick={discardPendingPrice}>放弃修改</button><button type="button" disabled={busy} onClick={publishPrice}>发布新价格</button></footer></div>}
+                {detail.pricing?.pendingPrice && <div className={styles.priceDiffPanel}><header><div><strong>有未发布价格修改</strong><small>当前生效价格不会在发布前改变</small></div><span>V{detail.pricing.currentVersion?.version ?? 0} → V{(detail.pricing.currentVersion?.version ?? 0) + 1}</span></header><div>{pendingDiff.map((row) => <article key={row.key}><span>{row.label}</span><b>{row.before ?? "未设置"} → {row.after ?? "不支持"}</b><small>{typeof row.after === "number" && typeof row.before === "number" ? `${row.after - row.before >= 0 ? "+" : ""}${row.after - row.before} ${row.unit}${row.before ? ` · ${(((row.after - row.before) / row.before) * 100).toFixed(1)}%` : ""}` : row.unit}</small></article>)}</div><footer><button type="button" className={styles.textDanger} onClick={discardPendingPrice}>放弃修改</button><button type="button" disabled={busy} onClick={publishPrice}>发布新价格</button></footer></div>}
               </section>
 
               <section className={styles.editorCard}>

@@ -14,6 +14,22 @@ export type ImageReferenceConfig = {
   referenceRequestCount?: 1;
   referenceResponseFormat?: "url" | "b64_json";
 };
+export type ImageRequestParameters = Record<string, string | number | boolean>;
+export type ImageAdapterConfig = JsonObject & ImageReferenceConfig & {
+  requestParameters?: ImageRequestParameters;
+  idempotencyHeader?: "Idempotency-Key";
+  preserveTaskMetadata?: true;
+  enableTaskOperations?: true;
+};
+export const imageTaskOperations = [
+  "imagine", "blend", "describe", "shorten", "uploads", "upscale", "upscale_creative",
+  "upscale_subtle", "upscale_subtile", "variation", "high_variation", "low_variation",
+  "reroll", "zoom", "custom_zoom", "pan", "inpaint", "modal",
+] as const;
+export const imageTaskSpeeds = ["fast", "relax", "turbo"] as const;
+export type ImageTaskOperation = typeof imageTaskOperations[number];
+export type ImageTaskSpeed = typeof imageTaskSpeeds[number];
+export type ImageOperationPrices = Partial<Record<ImageTaskOperation, Partial<Record<ImageTaskSpeed, string>>>>;
 export type AiModelRoute = {
   id: string;
   canonicalModelId: string | null;
@@ -28,7 +44,7 @@ export type AiModelRoute = {
   costProfile: JsonObject | null;
   capabilitiesOverride: JsonObject | null;
   adapterKey: string | null;
-  adapterConfig: (JsonObject & ImageReferenceConfig) | null;
+  adapterConfig: ImageAdapterConfig | null;
   executionMode?: ImageRouteExecutionMode | null;
   executionConfig?: JsonObject | null;
   metadata: JsonObject | null;
@@ -332,7 +348,46 @@ const pricingMapKeys = new Set([
   "referenceVideoCreditsByResolution",
 ]);
 
+const imageOperationCreditPattern = /^(?:0|[1-9]\d{0,15})(?:\.\d{1,6})?$/;
+const isPlainObject = (value: unknown): value is JsonObject => Boolean(value)
+  && typeof value === "object" && !Array.isArray(value)
+  && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+
+export function validateImageOperationPrices(value: unknown): asserts value is ImageOperationPrices {
+  if (!isPlainObject(value)) throw new Error("操作定价必须是按操作和速度配置的对象");
+  for (const [operation, prices] of Object.entries(value)) {
+    if (!(imageTaskOperations as readonly string[]).includes(operation) || !isPlainObject(prices)) {
+      throw new Error("操作定价包含未知操作或无效价格表");
+    }
+    for (const [speed, price] of Object.entries(prices)) {
+      if (!(imageTaskSpeeds as readonly string[]).includes(speed)
+        || typeof price !== "string" || !imageOperationCreditPattern.test(price)) {
+        throw new Error("操作价格必须使用已知速度，填写非负十进制字符串（最多 16 位整数和 6 位小数）");
+      }
+    }
+  }
+}
+
+export function imageOperationPriceDraftFor(
+  pricing: JsonObject, operation: ImageTaskOperation, speed: ImageTaskSpeed, text: string,
+): JsonObject {
+  const matrix = isPlainObject(pricing.creditsPerOperation) ? { ...pricing.creditsPerOperation } : {};
+  const row = isPlainObject(matrix[operation]) ? { ...matrix[operation] } : {};
+  if (!text.trim()) delete row[speed];
+  else row[speed] = text;
+  if (Object.keys(row).length) matrix[operation] = row;
+  else delete matrix[operation];
+  const next = { ...pricing };
+  if (Object.keys(matrix).length) next.creditsPerOperation = matrix;
+  else delete next.creditsPerOperation;
+  return next;
+}
+
 export function validatePricingDraft(pricing: JsonObject) {
+  if (pricing.creditsPerOperation !== undefined) {
+    if (pricing.billingType !== "image_flat") throw new Error("操作定价仅支持 image_flat 图片计费");
+    validateImageOperationPrices(pricing.creditsPerOperation);
+  }
   const visit = (value: unknown) => {
     if (Array.isArray(value)) return value.forEach(visit);
     if (!value || typeof value !== "object") return;
@@ -397,7 +452,78 @@ export function validateCostProfileDraft(costProfile: JsonObject) {
   }
 }
 
-export function validateAdapterConfigDraft(adapterConfig: JsonObject) {
+const protectedImageRequestParameters = new Set([
+  "model", "prompt", "image", "images", "input", "input_images", "mask", "mask_base64",
+  "size", "resolution", "aspect_ratio", "quality", "background", "output_format", "output_compression",
+  "stream", "async", "prototype", ...Object.getOwnPropertyNames(Object.prototype),
+].map(key => key.toLowerCase()));
+
+export function validateImageRequestParameters(value: unknown): asserts value is ImageRequestParameters {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) {
+    throw new Error("固定请求参数必须是 JSON 对象");
+  }
+  const entries = Object.entries(value);
+  if (entries.length > 20) throw new Error("固定请求参数最多允许 20 个字段");
+  for (const [key, parameter] of entries) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(key) || protectedImageRequestParameters.has(key.toLowerCase())) {
+      throw new Error("固定请求参数含无效或受保护的字段名");
+    }
+    if (!(typeof parameter === "string" && parameter.length <= 1000)
+      && !(typeof parameter === "number" && Number.isFinite(parameter))
+      && typeof parameter !== "boolean") {
+      throw new Error(`固定请求参数 ${key} 必须是最多 1000 字符的字符串、有限数字或布尔值`);
+    }
+    if (key === "n" && (typeof parameter !== "number" || !Number.isInteger(parameter) || parameter < 1 || parameter > 10)) {
+      throw new Error("固定请求参数 n 必须是 1 到 10 的整数");
+    }
+    if (key === "response_format" && parameter !== "url" && parameter !== "b64_json") {
+      throw new Error("固定请求参数 response_format 必须是 url 或 b64_json");
+    }
+  }
+}
+
+export function parseImageRequestParametersDraft(text: string): ImageRequestParameters | undefined {
+  if (!text.trim()) return undefined;
+  let parsed: unknown;
+  try { parsed = JSON.parse(text); } catch { throw new Error("固定请求参数 JSON 格式无效"); }
+  validateImageRequestParameters(parsed);
+  return Object.keys(parsed).length ? parsed : undefined;
+}
+
+export function imageAdapterConfigWithRequestParametersDraft(
+  adapterKey: string,
+  current: JsonObject | null,
+  text?: string,
+): JsonObject | null {
+  if (adapterKey !== "GENERIC_OPENAI_IMAGE" || text === undefined) return current;
+  const requestParameters = parseImageRequestParametersDraft(text);
+  if (current === null && requestParameters === undefined) return null;
+  const config = { ...current };
+  if (requestParameters === undefined) delete config.requestParameters;
+  else config.requestParameters = requestParameters;
+  validateAdapterConfigDraft(config, adapterKey);
+  return config;
+}
+
+export function validateAdapterConfigDraft(adapterConfig: JsonObject, adapterKey?: string) {
+  if (adapterKey === "GENERIC_OPENAI_IMAGE" && adapterConfig.idempotencyHeader !== undefined
+    && adapterConfig.idempotencyHeader !== "Idempotency-Key") {
+    throw new Error("Generic 图片幂等请求头只能设置为 Idempotency-Key，或保持未设置");
+  }
+  if (adapterKey === "GENERIC_OPENAI_IMAGE" && adapterConfig.preserveTaskMetadata !== undefined
+    && adapterConfig.preserveTaskMetadata !== true) {
+    throw new Error("Generic 图片任务信息保留只能设置为 true，或保持未设置");
+  }
+  if (adapterKey === "GENERIC_OPENAI_IMAGE" && adapterConfig.enableTaskOperations !== undefined) {
+    if (adapterConfig.enableTaskOperations !== true) throw new Error("任务后续操作接口只能设置为 true，或保持未设置");
+    const parameters = adapterConfig.requestParameters as JsonObject | undefined;
+    if (adapterConfig.preserveTaskMetadata !== true || adapterConfig.idempotencyHeader !== "Idempotency-Key"
+      || parameters?.operation !== "imagine" || parameters.n !== 1
+      || !(imageTaskSpeeds as readonly unknown[]).includes(parameters.speed)) {
+      throw new Error("开放任务后续操作需保留任务信息、启用 Idempotency-Key，并配置固定 operation=imagine、有效 speed 和 n=1");
+    }
+  }
   const enumFields: Record<string, readonly string[]> = {
     durationParameter: ["none", "seconds", "duration"],
     resolutionParameter: ["none", "size", "resolution"],
@@ -415,6 +541,17 @@ export function validateAdapterConfigDraft(adapterConfig: JsonObject) {
   });
   if (adapterConfig.referenceRequestCount !== undefined && adapterConfig.referenceRequestCount !== 1) {
     throw new Error("referenceRequestCount 只能设置为数字 1，或保持未设置");
+  }
+  if ((adapterKey === undefined || adapterKey === "GENERIC_OPENAI_IMAGE") && adapterConfig.requestParameters !== undefined) {
+    validateImageRequestParameters(adapterConfig.requestParameters);
+    if (adapterConfig.referenceRequestCount !== undefined && adapterConfig.requestParameters.n !== undefined
+      && adapterConfig.referenceRequestCount !== adapterConfig.requestParameters.n) {
+      throw new Error("固定请求参数 n 与参考图请求数量冲突");
+    }
+    if (adapterConfig.referenceResponseFormat !== undefined && adapterConfig.requestParameters.response_format !== undefined
+      && adapterConfig.referenceResponseFormat !== adapterConfig.requestParameters.response_format) {
+      throw new Error("固定请求参数 response_format 与参考图返回格式冲突");
+    }
   }
   const stringFields = [
     "taskIdPath",
@@ -440,6 +577,16 @@ export function validateAdapterConfigDraft(adapterConfig: JsonObject) {
     && adapterConfig.async !== "inherit") {
     throw new Error("async 配置无效");
   }
+}
+
+export function validateImageTaskOperationsDraft(
+  adapterKey: string, executionMode: unknown, adapterConfig: JsonObject | null, executionConfig: JsonObject | null,
+) {
+  if (adapterKey !== "GENERIC_OPENAI_IMAGE" || adapterConfig?.enableTaskOperations !== true) return;
+  if (imageRouteExecutionMode(executionMode) !== "TASK" || executionConfig?.profile !== "GENERIC_TASK") {
+    throw new Error("任务后续操作接口仅支持 Generic OpenAI Images + 异步任务 + Generic Task");
+  }
+  validateAdapterConfigDraft(adapterConfig, adapterKey);
 }
 
 export function imageRouteExecutionMode(value: unknown): ImageRouteExecutionMode {
@@ -732,6 +879,15 @@ export function canonicalKeyDraft(value: string) {
 export function priceSummary(pricing: JsonObject | null) {
   if (!pricing) return "未发布";
   const billingType = String(pricing.billingType || "");
+  if (billingType === "image_flat" && isPlainObject(pricing.creditsPerOperation)) {
+    const entries = Object.entries(pricing.creditsPerOperation).flatMap(([operation, speeds]) => (
+      (imageTaskOperations as readonly string[]).includes(operation) && isPlainObject(speeds)
+        ? Object.entries(speeds).filter(([speed, price]) => (imageTaskSpeeds as readonly string[]).includes(speed)
+          && typeof price === "string" && imageOperationCreditPattern.test(price))
+        : []
+    ));
+    if (entries.length) return `按操作定价 · ${entries.length} 项`;
+  }
   const resolutions = resolutionEntries(pricing.creditsPerImageByResolution);
   if (resolutions.length) {
     return resolutions.map(([key, value]) => (
@@ -865,13 +1021,13 @@ export type PriceDiffRow = {
   key: string;
   label: string;
   unit: string;
-  before: number | null;
-  after: number | null;
+  before: number | string | null;
+  after: number | string | null;
 };
 
 const pricingValueRows = (pricing: JsonObject | null) => {
-  if (!pricing) return new Map<string, Omit<PriceDiffRow, "before" | "after"> & { value: number }>();
-  const rows = new Map<string, Omit<PriceDiffRow, "before" | "after"> & { value: number }>();
+  if (!pricing) return new Map<string, Omit<PriceDiffRow, "before" | "after"> & { value: number | string }>();
+  const rows = new Map<string, Omit<PriceDiffRow, "before" | "after"> & { value: number | string }>();
   const add = (key: string, label: string, unit: string, value: unknown) => {
     const numeric = numberValue(value);
     if (numeric === null || isUnsupportedPrice(numeric)) return;
@@ -895,6 +1051,14 @@ const pricingValueRows = (pricing: JsonObject | null) => {
   }
   for (const [resolution, qualities] of Object.entries(objectValue(pricing.creditsPerImageByResolutionQuality) || {})) {
     for (const [quality, value] of resolutionEntries(qualities)) add(`image.${resolution}.${quality}`, `${resolution.toUpperCase()} + ${quality}`, "积分", value);
+  }
+  for (const [operation, speeds] of Object.entries(objectValue(pricing.creditsPerOperation) || {})) {
+    for (const [speed, value] of Object.entries(objectValue(speeds) || {})) {
+      if (typeof value !== "string" || !imageOperationCreditPattern.test(value)) continue;
+      const normalized = value.includes(".") ? value.replace(/0+$/, "").replace(/\.$/, "") : value;
+      const key = `operation.${operation}.${speed}`;
+      rows.set(key, { key, label: `${operation} · ${speed}`, unit: "积分 / 次", value: normalized });
+    }
   }
   add("request", "每次请求", "积分 / 次", pricing.creditsPerRequest);
   add("image", "每张图片", "积分 / 张", pricing.creditsPerImage);

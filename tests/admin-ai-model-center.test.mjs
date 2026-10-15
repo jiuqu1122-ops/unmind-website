@@ -11,6 +11,10 @@ import {
   effectiveDiscoveryModality,
   humanModelStatus,
   imageRouteExecutionMode,
+  imageAdapterConfigWithRequestParametersDraft,
+  imageOperationPriceDraftFor,
+  imageTaskOperations,
+  imageTaskSpeeds,
   imageTaskExecutionConfigFor,
   isModelCenterUnavailable,
   isUnsupportedPrice,
@@ -21,12 +25,14 @@ import {
   normalizeCapabilityOption,
   normalizeCapabilityOptions,
   parseJsonObject,
+  parseImageRequestParametersDraft,
   priceDiffRows,
   priceSummary,
   validateAdapterConfigDraft,
   validateCapabilitiesDraft,
   validateCostProfileDraft,
   validateImageRouteExecutionDraft,
+  validateImageTaskOperationsDraft,
   validatePricingDraft,
   resolveVideoCostBillingType,
   videoCostDraftForBillingType,
@@ -108,7 +114,7 @@ test("hides unsupported price sentinels and produces an operator-readable price 
   }]);
 });
 
-test("keeps all operational edits structured and raw JSON read-only", async () => {
+test("keeps capabilities and execution JSON read-only while operational controls remain structured", async () => {
   const source = await readFile(new URL("../app/admin/ai-model-center.tsx", import.meta.url), "utf8");
   assert.match(source, /更改上游映射/);
   assert.match(source, /解除上游映射/);
@@ -166,14 +172,12 @@ test("keeps all operational edits structured and raw JSON read-only", async () =
   assert.match(source, /系统不会自动迁移；请先解除映射/);
   assert.match(source, /validateCapabilitiesDraft\(capabilities\)/);
   assert.match(source, /validateCostProfileDraft\(costProfile\)/);
-  assert.match(source, /validateAdapterConfigDraft\(adapterConfig\)/);
   assert.doesNotMatch(source, /validateNumericTree/);
   assert.doesNotMatch(source, /canonicalModelKey: target, expectedUpdatedAt: discovery\.updatedAt/);
   assert.doesNotMatch(source, /\.\.\.draft, expectedUpdatedAt: discovery\.updatedAt/);
   assert.match(source, /该上游模型名与手动维护的兼容名称冲突/);
   assert.match(source, /该上游模型已被映射或不再处于待映射状态/);
   assert.doesNotMatch(source, /配置已被其他操作修改，请刷新后重试/);
-  assert.doesNotMatch(source, /<textarea/);
   assert.doesNotMatch(source, /<input[^>]+upstreamModelId/);
 });
 
@@ -436,6 +440,7 @@ test("validates only explicit reference request overrides without adding default
 
 const require = createRequire(import.meta.url);
 let imageAdapterEditor;
+let pricingEditor;
 const loadImageAdapterEditor = async () => {
   if (imageAdapterEditor) return imageAdapterEditor;
   const source = await readFile(new URL("../app/admin/ai-model-center.tsx", import.meta.url), "utf8");
@@ -455,6 +460,7 @@ const loadImageAdapterEditor = async () => {
   };
   new Function("require", "exports", compiled)(componentRequire, exports);
   imageAdapterEditor = exports.ImageAdapterEditor;
+  pricingEditor = exports.PricingEditor;
   assert.equal(typeof imageAdapterEditor, "function");
   return imageAdapterEditor;
 };
@@ -493,6 +499,11 @@ const editorFixture = async (overrides = {}) => {
       const control = controls().get(label);
       assert.ok(control, `missing control ${label}`);
       control.props.onChange({ target: { value: next } });
+    },
+    check: (label, checked) => {
+      const control = controls().get(label);
+      assert.ok(control, `missing control ${label}`);
+      control.props.onChange({ target: { checked } });
     },
   };
 };
@@ -552,6 +563,204 @@ test("Generic public HTTPS is explicit and reference options do not follow an un
   assert.equal(generic.controls().has("参考图请求数量 n"), false);
   assert.equal(generic.controls().has("参考图返回格式 response_format"), false);
   assert.deepEqual(generic.value.executionConfig, originalExecution);
+});
+
+test("validates flat fixed parameters, protected fields and reference override conflicts", () => {
+  const parameters = { operation: "imagine", speed: "fast", n: 1, response_format: "b64_json", flag: false, weight: 0, empty: "" };
+  validateAdapterConfigDraft({ requestParameters: parameters, referenceRequestCount: 1, referenceResponseFormat: "b64_json" });
+  assert.deepEqual(parameters, { operation: "imagine", speed: "fast", n: 1, response_format: "b64_json", flag: false, weight: 0, empty: "" });
+  validateAdapterConfigDraft({ requestParameters: Object.fromEntries(Array.from({ length: 20 }, (_, index) => [`param_${index}`, "x"])) });
+  validateAdapterConfigDraft({ requestParameters: { n: 10, operation: "x".repeat(1000) } });
+  for (const key of ["model", "PROMPT", "image", "images", "input", "input_images", "mask", "mask_base64",
+    "size", "resolution", "aspect_ratio", "quality", "background", "output_format", "output_compression", "stream", "async",
+    "__proto__", "constructor", "prototype", "toString", "hasOwnProperty", "bad-key", "x".repeat(65)]) {
+    assert.throws(() => validateAdapterConfigDraft({ requestParameters: JSON.parse(`{"${key}":"value"}`) }), /字段名/);
+  }
+  for (const requestParameters of [null, [], "string", { nested: {} }, { nested: [] }, { value: null },
+    { value: NaN }, { value: Infinity }, { value: "x".repeat(1001) },
+    Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`param_${index}`, true]))]) {
+    assert.throws(() => validateAdapterConfigDraft({ requestParameters }), /固定请求参数/);
+  }
+  for (const n of [0, 11, 1.5, "1", true]) assert.throws(() => validateAdapterConfigDraft({ requestParameters: { n } }), /n/);
+  for (const response_format of ["base64", "", false]) assert.throws(() => validateAdapterConfigDraft({ requestParameters: { response_format } }), /response_format/);
+  assert.throws(() => validateAdapterConfigDraft({ requestParameters: { n: 2 }, referenceRequestCount: 1 }), /冲突/);
+  assert.throws(() => validateAdapterConfigDraft({ requestParameters: { response_format: "url" }, referenceResponseFormat: "b64_json" }), /冲突/);
+  assert.doesNotThrow(() => validateAdapterConfigDraft({ idempotencyHeader: "Idempotency-Key" }, "GENERIC_OPENAI_IMAGE"));
+  assert.throws(() => validateAdapterConfigDraft({ idempotencyHeader: "X-Request-Id" }, "GENERIC_OPENAI_IMAGE"), /Idempotency-Key/);
+  assert.doesNotThrow(() => validateAdapterConfigDraft({ idempotencyHeader: "X-Task-Id" }, "GENERIC_ASYNC_VIDEO"));
+  assert.doesNotThrow(() => validateAdapterConfigDraft({ requestParameters: { model: { legacy: true } } }, "GPT_IMAGE"));
+  assert.doesNotThrow(() => validateAdapterConfigDraft({ preserveTaskMetadata: true }, "GENERIC_OPENAI_IMAGE"));
+  for (const preserveTaskMetadata of [false, "true", 1, null]) {
+    assert.throws(() => validateAdapterConfigDraft({ preserveTaskMetadata }, "GENERIC_OPENAI_IMAGE"), /任务信息保留/);
+  }
+  assert.doesNotThrow(() => validateAdapterConfigDraft({ preserveTaskMetadata: false }, "GPT_IMAGE"));
+});
+
+test("keeps unset fixed parameters absent and clears only the explicit JSON draft", () => {
+  const original = { generationEndpoint: "/v1/images/generations", requestParameters: { operation: "imagine", empty: "", flag: false, weight: 0 } };
+  assert.equal(imageAdapterConfigWithRequestParametersDraft("GENERIC_OPENAI_IMAGE", original), original);
+  assert.equal(imageAdapterConfigWithRequestParametersDraft("GENERIC_OPENAI_IMAGE", null, ""), null);
+  for (const text of ["", " \n ", "{}", "{ } "]) {
+    assert.equal(parseImageRequestParametersDraft(text), undefined);
+    assert.deepEqual(imageAdapterConfigWithRequestParametersDraft("GENERIC_OPENAI_IMAGE", original, text), { generationEndpoint: "/v1/images/generations" });
+  }
+  const parsed = imageAdapterConfigWithRequestParametersDraft("GENERIC_OPENAI_IMAGE", {}, JSON.stringify(original.requestParameters));
+  assert.deepEqual(parsed, { requestParameters: original.requestParameters });
+  assert.deepEqual(JSON.parse(JSON.stringify(parsed)), parsed);
+  assert.deepEqual(original.requestParameters, { operation: "imagine", empty: "", flag: false, weight: 0 });
+  for (const text of ["{", "null", "[]", '{"size":"2K"}']) {
+    assert.throws(() => imageAdapterConfigWithRequestParametersDraft("GENERIC_OPENAI_IMAGE", original, text), /固定请求参数/);
+  }
+  assert.equal(imageAdapterConfigWithRequestParametersDraft("GPT_IMAGE", null, '{"operation":"imagine"}'), null);
+});
+
+test("edits fixed request JSON without losing invalid text and round-trips only deliberate Generic options", async () => {
+  const editor = await editorFixture({ adapterConfig: { generationEndpoint: "/v1/images/generations", resolutionParameter: "none", aspectRatioParameter: "aspect_ratio" } });
+  const originalConfig = structuredClone(editor.value.adapterConfig);
+  const originalExecution = structuredClone(editor.value.executionConfig);
+  assert.equal(editor.controls().get("固定请求参数").props.value, "");
+  assert.equal(editor.controls().get("按原请求编号生成 Idempotency-Key").props.checked, false);
+  assert.equal(editor.controls().get("保留任务与按钮信息（供后续操作使用）").props.checked, false);
+  assert.equal(editor.changes, 0);
+  editor.select("固定请求参数", '{"operation":');
+  assert.equal(editor.controls().get("固定请求参数").props.value, '{"operation":');
+  assert.equal(editor.controls().get("固定请求参数").props["aria-invalid"], true);
+  assert.throws(() => imageAdapterConfigWithRequestParametersDraft(editor.value.adapterKey, editor.value.adapterConfig, editor.value.requestParametersDraft), /JSON/);
+  assert.deepEqual(editor.value.adapterConfig, originalConfig);
+  const text = '{"operation":"imagine","speed":"fast","n":1,"empty":"","flag":false,"weight":0}';
+  editor.select("固定请求参数", text);
+  editor.select("Generation Endpoint", "/v1/images/generations");
+  editor.check("按原请求编号生成 Idempotency-Key", true);
+  editor.check("保留任务与按钮信息（供后续操作使用）", true);
+  assert.equal(editor.controls().get("固定请求参数").props["aria-invalid"], false);
+  const saved = imageAdapterConfigWithRequestParametersDraft(editor.value.adapterKey, editor.value.adapterConfig, editor.value.requestParametersDraft);
+  validateAdapterConfigDraft(saved, editor.value.adapterKey);
+  assert.deepEqual(saved.requestParameters, JSON.parse(text));
+  assert.equal(saved.idempotencyHeader, "Idempotency-Key");
+  assert.equal(saved.preserveTaskMetadata, true);
+  assert.equal(saved.resolutionParameter, "none");
+  assert.equal(saved.aspectRatioParameter, "aspect_ratio");
+  assert.deepEqual(editor.value.executionConfig, originalExecution);
+  const reopened = await editorFixture({ adapterConfig: JSON.parse(JSON.stringify(saved)) });
+  assert.deepEqual(JSON.parse(reopened.controls().get("固定请求参数").props.value), JSON.parse(text));
+  assert.equal(reopened.controls().get("按原请求编号生成 Idempotency-Key").props.checked, true);
+  assert.equal(reopened.controls().get("保留任务与按钮信息（供后续操作使用）").props.checked, true);
+  reopened.select("固定请求参数", "{}");
+  reopened.check("按原请求编号生成 Idempotency-Key", false);
+  reopened.check("保留任务与按钮信息（供后续操作使用）", false);
+  const cleared = imageAdapterConfigWithRequestParametersDraft(reopened.value.adapterKey, reopened.value.adapterConfig, reopened.value.requestParametersDraft);
+  assert.equal(Object.hasOwn(cleared, "requestParameters"), false);
+  assert.equal(Object.hasOwn(cleared, "idempotencyHeader"), false);
+  assert.equal(Object.hasOwn(cleared, "preserveTaskMetadata"), false);
+  editor.select("图片调用协议", "GPT_IMAGE");
+  assert.equal(editor.value.requestParametersDraft, undefined);
+  assert.equal(editor.controls().has("固定请求参数"), false);
+  assert.equal(editor.controls().has("按原请求编号生成 Idempotency-Key"), false);
+  assert.equal(editor.controls().has("保留任务与按钮信息（供后续操作使用）"), false);
+});
+
+test("validates operation pricing as exact optional decimal strings without a base-price fallback", () => {
+  validatePricingDraft({ billingType: "image_flat", creditsPerRequest: "50" });
+  const allOperations = Object.fromEntries(imageTaskOperations.map(operation => [operation,
+    Object.fromEntries(imageTaskSpeeds.map(speed => [speed, "0"]))]));
+  validatePricingDraft({ billingType: "image_flat", creditsPerOperation: allOperations });
+  validatePricingDraft({ billingType: "image_flat", creditsPerOperation: { imagine: { fast: "9999999999999999.999999" } } });
+  for (const price of [0, -1, "-1", "1e2", " 1", "01", "1.1234567", "10000000000000000", ""]) {
+    assert.throws(() => validatePricingDraft({ billingType: "image_flat", creditsPerOperation: { upscale: { fast: price } } }), /操作价格/);
+  }
+  for (const creditsPerOperation of [null, [], { unknown: { fast: "1" } }, { upscale: null }, { upscale: { unknown: "1" } }]) {
+    assert.throws(() => validatePricingDraft({ billingType: "image_flat", creditsPerOperation }), /操作/);
+  }
+  assert.throws(() => validatePricingDraft({ billingType: "image_count", creditsPerOperation: { upscale: { fast: "1" } } }), /image_flat/);
+  const current = { billingType: "image_flat", creditsPerRequest: "50", creditsPerOperation: { upscale: { fast: "9999999999999999.999998" } } };
+  const pending = { ...current, creditsPerOperation: { upscale: { fast: "9999999999999999.999999" }, upscale_subtle: { fast: "0" }, upscale_subtile: { fast: "1.5" } } };
+  const changes = priceDiffRows(current, pending);
+  assert.deepEqual(changes.find(row => row.key === "operation.upscale.fast"), {
+    key: "operation.upscale.fast", label: "upscale · fast", unit: "积分 / 次",
+    before: "9999999999999999.999998", after: "9999999999999999.999999",
+  });
+  assert.equal(changes.find(row => row.key === "operation.upscale_subtle.fast").after, "0");
+  assert.equal(changes.find(row => row.key === "operation.upscale_subtile.fast").after, "1.5");
+  assert.equal(priceSummary(current), "按操作定价 · 1 项");
+  assert.equal(priceSummary({ billingType: "image_flat", creditsPerRequest: "50" }), "50 点/次");
+});
+
+test("edits operation and speed prices under image_flat without default entries and prunes cleared prices", async () => {
+  await loadImageAdapterEditor();
+  let value = { billingType: "image_flat", creditsPerRequest: "50" };
+  const render = (billingType = "image_flat") => pricingEditor({
+    detail: { modality: "image", billingType }, capabilities: {}, value,
+    onChange: next => { value = next; },
+  });
+  const controls = () => {
+    const found = new Map();
+    const visit = node => {
+      if (Array.isArray(node)) return node.forEach(visit);
+      if (!node || typeof node !== "object" || !node.props) return;
+      if (typeof node.type === "function") return visit(node.type(node.props));
+      if (node.props["aria-label"]) found.set(node.props["aria-label"], node);
+      visit(node.props.children);
+    };
+    visit(render());
+    return found;
+  };
+  const set = (operation, speed, next) => controls().get(`操作售价 ${operation} ${speed}`).props.onChange({ target: { value: next } });
+  assert.equal(controls().size, 54);
+  assert.deepEqual(value, { billingType: "image_flat", creditsPerRequest: "50" });
+  assert.match(renderToStaticMarkup(render()), /0 表示明确免费/);
+  assert.doesNotMatch(renderToStaticMarkup(render("image_count")), /操作售价/);
+  set("imagine", "fast", "25");
+  set("upscale_subtle", "fast", "0");
+  set("upscale_subtile", "fast", "1.5");
+  assert.deepEqual(value.creditsPerOperation, { imagine: { fast: "25" }, upscale_subtle: { fast: "0" }, upscale_subtile: { fast: "1.5" } });
+  assert.equal(value.creditsPerRequest, "50");
+  const saved = JSON.parse(JSON.stringify(value));
+  validatePricingDraft(saved);
+  value = saved;
+  assert.equal(controls().get("操作售价 upscale_subtle fast").props.value, "0");
+  assert.equal(controls().get("操作售价 upscale_subtile fast").props.value, "1.5");
+  assert.equal(controls().get("操作售价 upscale turbo").props.value, "");
+  set("upscale", "turbo", "9999999999999999.999999");
+  assert.equal(controls().get("操作售价 upscale turbo").props.value, "9999999999999999.999999");
+  assert.match(renderToStaticMarkup(render()), /value="9999999999999999\.999999"/);
+  value = JSON.parse(JSON.stringify(value));
+  assert.equal(controls().get("操作售价 upscale turbo").props.value, "9999999999999999.999999");
+  set("upscale", "turbo", "");
+  for (const operation of ["imagine", "upscale_subtle", "upscale_subtile"]) set(operation, "fast", "");
+  assert.equal(Object.hasOwn(value, "creditsPerOperation"), false);
+  assert.deepEqual(imageOperationPriceDraftFor({ billingType: "image_flat", creditsPerRequest: "50" }, "upscale", "fast", ""), value);
+});
+
+test("requires explicit Generic Task operation prerequisites and round-trips the opt-in without auto-enabling anything", async () => {
+  const config = { enableTaskOperations: true, preserveTaskMetadata: true, idempotencyHeader: "Idempotency-Key",
+    requestParameters: { operation: "imagine", speed: "fast", n: 1 } };
+  const executionConfig = { profile: "GENERIC_TASK" };
+  validateAdapterConfigDraft(config, "GENERIC_OPENAI_IMAGE");
+  validateImageTaskOperationsDraft("GENERIC_OPENAI_IMAGE", "TASK", config, executionConfig);
+  for (const patch of [{ preserveTaskMetadata: undefined }, { idempotencyHeader: undefined },
+    { requestParameters: {} }, { requestParameters: { operation: "upscale", speed: "fast", n: 1 } },
+    { requestParameters: { operation: "imagine", speed: "unknown", n: 1 } },
+    { requestParameters: { operation: "imagine", speed: "fast", n: 2 } }]) {
+    assert.throws(() => validateAdapterConfigDraft({ ...config, ...patch }, "GENERIC_OPENAI_IMAGE"), /后续操作/);
+  }
+  assert.throws(() => validateAdapterConfigDraft({ enableTaskOperations: false }, "GENERIC_OPENAI_IMAGE"), /后续操作/);
+  for (const mode of ["INHERIT", "DIRECT"]) assert.throws(() => validateImageTaskOperationsDraft("GENERIC_OPENAI_IMAGE", mode, config, executionConfig), /Generic Task/);
+  assert.throws(() => validateImageTaskOperationsDraft("GENERIC_OPENAI_IMAGE", "TASK", config, { profile: "USELG_IMAGE_TASK" }), /Generic Task/);
+  const editor = await editorFixture();
+  assert.equal(editor.controls().get("开放任务后续操作接口").props.checked, false);
+  editor.check("开放任务后续操作接口", true);
+  assert.equal(editor.value.adapterConfig.enableTaskOperations, true);
+  assert.equal(Object.hasOwn(editor.value.adapterConfig, "preserveTaskMetadata"), false);
+  assert.equal(Object.hasOwn(editor.value.adapterConfig, "idempotencyHeader"), false);
+  assert.equal(Object.hasOwn(editor.value.adapterConfig, "requestParameters"), false);
+  assert.equal(editor.controls().get("固定请求参数").props["aria-invalid"], true);
+  editor.check("开放任务后续操作接口", false);
+  assert.equal(Object.hasOwn(editor.value.adapterConfig, "enableTaskOperations"), false);
+  const enabled = await editorFixture({ adapterConfig: JSON.parse(JSON.stringify(config)) });
+  assert.equal(enabled.controls().get("开放任务后续操作接口").props.checked, true);
+  enabled.check("开放任务后续操作接口", false);
+  assert.equal(Object.hasOwn(enabled.value.adapterConfig, "enableTaskOperations"), false);
+  assert.equal((await editorFixture({ adapterKey: "GPT_IMAGE" })).controls().has("开放任务后续操作接口"), false);
 });
 
 test("switches video sell-price drafts without retaining mutually exclusive base fields", () => {
