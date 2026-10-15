@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { createRequire } from "node:module";
+import { renderToStaticMarkup } from "react-dom/server";
+import ts from "typescript";
+import * as modelCenterModel from "../app/admin/ai-model-center-model.ts";
 import {
   canonicalKeyDraft,
   costSummary,
@@ -412,6 +416,142 @@ test("keeps pricing, cost, and adapter validation schema-specific", () => {
   }));
   assert.throws(() => validatePricingDraft({ creditsPerSecond: "NaN" }), /NaN/);
   assert.throws(() => validateCostProfileDraft({ currency: "POINTS" }), /USD/);
+});
+
+test("validates only explicit reference request overrides without adding defaults", () => {
+  for (const config of [{}, { referenceRequestCount: 1 }, { referenceResponseFormat: "url" },
+    { referenceTransport: "data_url", referenceRequestCount: 1, referenceResponseFormat: "b64_json" }]) {
+    const saved = structuredClone(config);
+    validateAdapterConfigDraft(saved);
+    assert.deepEqual(saved, config);
+    assert.deepEqual(JSON.parse(JSON.stringify(saved)), config);
+  }
+  for (const referenceRequestCount of [0, 2, "1", true, null, NaN]) {
+    assert.throws(() => validateAdapterConfigDraft({ referenceRequestCount }), /referenceRequestCount/);
+  }
+  for (const referenceResponseFormat of ["", "base64", 1, null]) {
+    assert.throws(() => validateAdapterConfigDraft({ referenceResponseFormat }), /referenceResponseFormat/);
+  }
+});
+
+const require = createRequire(import.meta.url);
+let imageAdapterEditor;
+const loadImageAdapterEditor = async () => {
+  if (imageAdapterEditor) return imageAdapterEditor;
+  const source = await readFile(new URL("../app/admin/ai-model-center.tsx", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.CommonJS,
+      jsx: ts.JsxEmit.ReactJSX,
+      esModuleInterop: true,
+    },
+  }).outputText;
+  const exports = {};
+  const componentRequire = (id) => {
+    if (id === "./ai-model-center-model") return modelCenterModel;
+    if (id === "./admin.module.css") return {};
+    return require(id);
+  };
+  new Function("require", "exports", compiled)(componentRequire, exports);
+  imageAdapterEditor = exports.ImageAdapterEditor;
+  assert.equal(typeof imageAdapterEditor, "function");
+  return imageAdapterEditor;
+};
+
+const editorFixture = async (overrides = {}) => {
+  const Editor = await loadImageAdapterEditor();
+  let changes = 0;
+  let value = {
+    priority: "100", costProfile: {}, capabilitiesOverride: null,
+    adapterKey: "GENERIC_OPENAI_IMAGE", adapterConfig: {},
+    executionMode: "TASK", executionConfig: { profile: "GENERIC_TASK", submitEndpoint: "/custom/submit", asyncParameterName: "async", asyncParameterValue: false },
+    ...overrides,
+  };
+  const element = () => Editor({
+    routeId: "route-1", upstreamModel: "documented-image-model", canonicalModelKey: "configured-image",
+    supportsReferenceImages: true, value,
+    onChange: (next) => { changes++; value = next; },
+  });
+  const controls = () => {
+    const found = new Map();
+    const visit = (node) => {
+      if (Array.isArray(node)) return node.forEach(visit);
+      if (!node || typeof node !== "object" || !node.props) return;
+      if (node.props["aria-label"]) found.set(node.props["aria-label"], node);
+      visit(node.props.children);
+    };
+    visit(element());
+    return found;
+  };
+  return {
+    get value() { return value; },
+    get changes() { return changes; },
+    controls,
+    html: () => renderToStaticMarkup(element()),
+    select: (label, next) => {
+      const control = controls().get(label);
+      assert.ok(control, `missing control ${label}`);
+      control.props.onChange({ target: { value: next } });
+    },
+  };
+};
+
+test("Generic reference controls stay unset until selected and round-trip explicit values", async () => {
+  const editor = await editorFixture({ adapterConfig: {
+    generationEndpoint: "/v1/images/generations", resolutionParameter: "size", resolutionValueMode: "exact",
+    exactDimensions: { "2K": { "16:9": "2048x1152" } },
+  } });
+  const original = structuredClone(editor.value);
+  assert.match(editor.html(), /参考图请求数量 n/);
+  for (const label of ["参考图传输方式", "参考图请求数量 n", "参考图返回格式 response_format"]) {
+    assert.equal(editor.controls().get(label).props.value, "");
+  }
+  assert.equal(editor.changes, 0);
+  assert.deepEqual(editor.value, original);
+  editor.select("Generation Endpoint", "/v1/images/generations");
+  for (const field of ["referenceTransport", "referenceRequestCount", "referenceResponseFormat"]) {
+    assert.equal(Object.hasOwn(editor.value.adapterConfig, field), false);
+  }
+  editor.select("参考图格式", "object_image_url");
+  editor.select("参考图传输方式", "data_url");
+  editor.select("参考图请求数量 n", "1");
+  editor.select("参考图返回格式 response_format", "b64_json");
+  const saved = JSON.parse(JSON.stringify(editor.value.adapterConfig));
+  validateAdapterConfigDraft(saved);
+  assert.equal(saved.referenceSerializer, "object_image_url");
+  assert.equal(saved.referenceTransport, "data_url");
+  assert.equal(saved.referenceRequestCount, 1);
+  assert.equal(saved.referenceResponseFormat, "b64_json");
+  assert.equal(saved.generationEndpoint, original.adapterConfig.generationEndpoint);
+  assert.deepEqual(saved.exactDimensions, original.adapterConfig.exactDimensions);
+  assert.deepEqual(editor.value.executionConfig, original.executionConfig);
+  const reopened = await editorFixture({ adapterConfig: saved });
+  assert.equal(reopened.controls().get("参考图传输方式").props.value, "data_url");
+  assert.equal(reopened.controls().get("参考图请求数量 n").props.value, "1");
+  assert.equal(reopened.controls().get("参考图返回格式 response_format").props.value, "b64_json");
+  for (const label of ["参考图传输方式", "参考图请求数量 n", "参考图返回格式 response_format"]) editor.select(label, "");
+  for (const field of ["referenceTransport", "referenceRequestCount", "referenceResponseFormat"]) {
+    assert.equal(Object.hasOwn(editor.value.adapterConfig, field), false);
+  }
+  assert.deepEqual(editor.value.executionConfig, original.executionConfig);
+});
+
+test("Generic public HTTPS is explicit and reference options do not follow an unrelated adapter", async () => {
+  const generic = await editorFixture();
+  generic.select("参考图传输方式", "public_https");
+  assert.equal(generic.value.adapterConfig.referenceTransport, "public_https");
+  assert.equal(Object.hasOwn(generic.value.adapterConfig, "referenceRequestCount"), false);
+  assert.equal(Object.hasOwn(generic.value.adapterConfig, "referenceResponseFormat"), false);
+  const originalExecution = structuredClone(generic.value.executionConfig);
+  generic.select("参考图请求数量 n", "1");
+  generic.select("参考图返回格式 response_format", "url");
+  generic.select("图片调用协议", "GPT_IMAGE");
+  assert.equal(generic.value.adapterConfig, null);
+  assert.equal(generic.controls().has("参考图传输方式"), false);
+  assert.equal(generic.controls().has("参考图请求数量 n"), false);
+  assert.equal(generic.controls().has("参考图返回格式 response_format"), false);
+  assert.deepEqual(generic.value.executionConfig, originalExecution);
 });
 
 test("switches video sell-price drafts without retaining mutually exclusive base fields", () => {

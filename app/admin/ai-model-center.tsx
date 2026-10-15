@@ -40,6 +40,7 @@ import {
   type AiUpstreamDiscovery,
   type CapabilityOptionKind,
   type ImageRouteExecutionMode,
+  type ImageReferenceConfig,
   type JsonObject,
   type VideoBillingType,
 } from "./ai-model-center-model";
@@ -64,7 +65,7 @@ type RouteDraft = {
   costProfile: JsonObject;
   capabilitiesOverride: JsonObject | null;
   adapterKey: string;
-  adapterConfig: JsonObject | null;
+  adapterConfig: (JsonObject & ImageReferenceConfig) | null;
   executionMode: ImageRouteExecutionMode;
   executionConfig: JsonObject | null;
 };
@@ -892,7 +893,7 @@ function CostEditor({ modality, value, onChange, capabilities = {} }: {
   </div>;
 }
 
-function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, value, supportsReferenceImages, onChange }: {
+export function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, value, supportsReferenceImages, onChange }: {
   routeId: string;
   upstreamModel: string;
   canonicalModelKey: string;
@@ -1019,9 +1020,17 @@ function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, value, 
           <label><strong>Aspect Ratio</strong><select aria-label="Aspect Ratio 参数" value={String(config.aspectRatioParameter ?? "none")} onChange={(event) => setConfig("aspectRatioParameter", event.target.value)}><option value="none">不发送</option><option value="aspect_ratio">aspect_ratio</option></select></label>
           <label><strong>生成接口</strong><input aria-label="Generation Endpoint" value={String(config.generationEndpoint ?? "/v1/images/generations")} onChange={(event) => setConfig("generationEndpoint", event.target.value)} /></label>
           {(value.adapterKey === "SEEDREAM_IMAGES_API" || value.adapterKey === "GENERIC_OPENAI_IMAGE") && <label><strong>编辑接口（可选）</strong><input aria-label="Edit Endpoint" value={String(config.editEndpoint ?? (value.adapterKey === "SEEDREAM_IMAGES_API" ? "/v1/images/edits" : ""))} onChange={(event) => setConfig("editEndpoint", event.target.value)} /></label>}
-          {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <label><strong>参考图格式</strong><select aria-label="参考图格式" value={referenceSerializer} onChange={(event) => setConfig("referenceSerializer", event.target.value || undefined)}><option value="">无</option><option value="json_image">单图 image</option><option value="json_images">多图 images</option></select></label>}
+          {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <>
+            <label><strong>参考图格式</strong><select aria-label="参考图格式" value={referenceSerializer} onChange={(event) => setConfig("referenceSerializer", event.target.value || undefined)}><option value="">无</option><option value="json_image">单图 image</option><option value="json_images">多图 images</option><option value="object_image_url">对象数组 images[].image_url</option></select></label>
+            {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <label><strong>参考图传输方式</strong><select aria-label="参考图传输方式" value={String(config.referenceTransport ?? "")} onChange={(event) => setConfig("referenceTransport", event.target.value || undefined)}><option value="">跟随协议默认（未设置）</option><option value="public_https">公开 HTTPS 地址</option><option value="data_url">Data URL / Base64（显式启用）</option></select></label>}
+            {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <>
+              <label><strong>参考图请求数量 n</strong><select aria-label="参考图请求数量 n" value={String(config.referenceRequestCount ?? "")} onChange={(event) => setConfig("referenceRequestCount", event.target.value === "1" ? 1 : undefined)}><option value="">跟随协议默认（未设置）</option><option value="1">1（客户端需选择 1 组）</option></select></label>
+              <label><strong>参考图返回格式 response_format</strong><select aria-label="参考图返回格式 response_format" value={String(config.referenceResponseFormat ?? "")} onChange={(event) => setConfig("referenceResponseFormat", event.target.value || undefined)}><option value="">跟随协议默认（未设置）</option><option value="url">url</option><option value="b64_json">b64_json</option></select></label>
+            </>}
+          </>}
         </div>
         {value.adapterKey === "GENERIC_OPENAI_IMAGE" && supportsReferenceImages && !referenceSerializer && <div className={styles.inlineProtocolWarning}>该 Route 支持参考图，但尚未确认参考图序列化字段。</div>}
+        {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <div className={styles.protocolNotice}>以上 n 和 response_format 仅在请求含参考图时按显式配置发送，不改变文生图请求。Data URL 仅在渠道文档确认支持时启用；未设置时保留现有传输方式。配置 n=1 时客户端需选择 1 组，不会自动改写请求数量。</div>}
         {config.resolutionValueMode === "exact" && <details><summary>配置 exact dimension mapping</summary><p>只会发送这里明确填写的像素值；未配置的分辨率与比例组合会停止请求，不会猜测尺寸。</p><div className={styles.formGrid}>{["1K", "2K", "4K"].flatMap((resolution) => ["1:1", "16:9", "9:16", "3:2", "2:3", "4:3", "3:4"].map((aspectRatio) => <label key={`${resolution}:${aspectRatio}`}><strong>{resolution} · {aspectRatio}</strong><input aria-label={`${resolution} ${aspectRatio} exact dimension`} placeholder="例如 1672x941" value={String(objectValue(objectValue(config.exactDimensions)[resolution])[aspectRatio] ?? "")} onChange={(event) => setExactDimension(resolution, aspectRatio, event.target.value)} /></label>))}</div></details>}
         <details className={styles.adapterAdvanced}><summary>协议高级 JSON（只读）</summary><pre>{formatJson(config)}</pre></details>
       </>)}

@@ -8,6 +8,12 @@ export type VideoBillingType = "video_flat" | "video_second" | "video_duration" 
 export type AiUsageModelKey = "IMAGE_ANALYSIS" | "CANVAS_TEXT";
 export type ImageRouteExecutionMode = "INHERIT" | "DIRECT" | "TASK";
 export type ImageTaskExecutionProfile = "USELG_IMAGE_TASK" | "GENERIC_TASK";
+export type ImageReferenceConfig = {
+  referenceSerializer?: "json_image" | "json_images" | "object_image_url";
+  referenceTransport?: "data_url" | "public_https";
+  referenceRequestCount?: 1;
+  referenceResponseFormat?: "url" | "b64_json";
+};
 export type AiModelRoute = {
   id: string;
   canonicalModelId: string | null;
@@ -22,7 +28,7 @@ export type AiModelRoute = {
   costProfile: JsonObject | null;
   capabilitiesOverride: JsonObject | null;
   adapterKey: string | null;
-  adapterConfig: JsonObject | null;
+  adapterConfig: (JsonObject & ImageReferenceConfig) | null;
   executionMode?: ImageRouteExecutionMode | null;
   executionConfig?: JsonObject | null;
   metadata: JsonObject | null;
@@ -397,7 +403,9 @@ export function validateAdapterConfigDraft(adapterConfig: JsonObject) {
     resolutionParameter: ["none", "size", "resolution"],
     aspectRatioParameter: ["none", "aspect_ratio", "ratio"],
     referenceSerialization: ["array"],
-    referenceSerializer: ["json_image", "json_images"],
+    referenceSerializer: ["json_image", "json_images", "object_image_url"],
+    referenceTransport: ["public_https", "data_url"],
+    referenceResponseFormat: ["url", "b64_json"],
   };
   Object.entries(enumFields).forEach(([key, allowed]) => {
     const value = adapterConfig[key];
@@ -405,6 +413,9 @@ export function validateAdapterConfigDraft(adapterConfig: JsonObject) {
       throw new Error(`${key} 配置无效`);
     }
   });
+  if (adapterConfig.referenceRequestCount !== undefined && adapterConfig.referenceRequestCount !== 1) {
+    throw new Error("referenceRequestCount 只能设置为数字 1，或保持未设置");
+  }
   const stringFields = [
     "taskIdPath",
     "statusPath",
