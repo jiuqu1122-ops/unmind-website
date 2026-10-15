@@ -892,8 +892,10 @@ function CostEditor({ modality, value, onChange, capabilities = {} }: {
   </div>;
 }
 
-function ImageAdapterEditor({ routeId, value, supportsReferenceImages, onChange }: {
+function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, value, supportsReferenceImages, onChange }: {
   routeId: string;
+  upstreamModel: string;
+  canonicalModelKey: string;
   value: RouteDraft;
   supportsReferenceImages: boolean;
   onChange: (next: RouteDraft) => void;
@@ -905,6 +907,8 @@ function ImageAdapterEditor({ routeId, value, supportsReferenceImages, onChange 
     || executionConfig.profile === "GENERIC_TASK"
     ? executionConfig.profile
     : "";
+  const effectiveTaskConfig = imageTaskExecutionConfigFor(taskProfile, executionConfig,
+    typeof config?.async === "boolean" ? config.async : undefined, [upstreamModel, canonicalModelKey]);
   const setConfig = (key: string, next: unknown) => {
     const nextConfig = { ...objectValue(config), [key]: next };
     if (next === undefined) delete nextConfig[key];
@@ -919,6 +923,10 @@ function ImageAdapterEditor({ routeId, value, supportsReferenceImages, onChange 
   };
   const setExecutionConfig = (key: string, next: unknown) => {
     const nextConfig = { ...executionConfig, [key]: next };
+    if (key === "asyncParameterValue" && executionConfig.asyncParameterName == null
+      && effectiveTaskConfig.asyncParameterName !== undefined) {
+      nextConfig.asyncParameterName = effectiveTaskConfig.asyncParameterName;
+    }
     if (next === undefined || next === "") delete nextConfig[key];
     onChange({ ...value, executionConfig: nextConfig });
   };
@@ -933,7 +941,8 @@ function ImageAdapterEditor({ routeId, value, supportsReferenceImages, onChange 
     }
     onChange({
       ...value,
-      executionConfig: imageTaskExecutionConfigFor(profile, preserved),
+      executionConfig: imageTaskExecutionConfigFor(profile, preserved,
+        typeof config?.async === "boolean" ? config.async : undefined, [upstreamModel, canonicalModelKey]),
     });
   };
   const setExactDimension = (resolution: string, aspectRatio: string, next: string) => {
@@ -988,8 +997,8 @@ function ImageAdapterEditor({ routeId, value, supportsReferenceImages, onChange 
           {value.adapterKey !== "SEEDREAM_IMAGES_API" && <label><strong>Submit Endpoint</strong><input aria-label="Submit Endpoint" placeholder="例如 /v1/images/generations" value={String(executionConfig.submitEndpoint ?? "")} onChange={(event) => setExecutionConfig("submitEndpoint", event.target.value)} /></label>}
           {value.adapterKey === "SEEDREAM_IMAGES_API" && <div className={styles.protocolNotice}>Seedream TASK 提交端点由上面的生成/编辑接口决定；此字段不会覆盖真实生效端点。</div>}
           <label><strong>提交超时（毫秒）</strong><input aria-label="Submit Timeout" type="number" min={45000} max={90000} step={1000} value={String(executionConfig.submitTimeoutMs ?? 60000)} onChange={(event) => setExecutionConfig("submitTimeoutMs", Number(event.target.value))} /></label>
-          <label><strong>Async 参数名（可选）</strong><input aria-label="Async Parameter Name" placeholder="例如 async" value={String(executionConfig.asyncParameterName ?? "")} onChange={(event) => setExecutionConfig("asyncParameterName", event.target.value)} /></label>
-          {Boolean(executionConfig.asyncParameterName) && <label><strong>Async 参数值</strong><select aria-label="Async Parameter Value" value={String(executionConfig.asyncParameterValue ?? true)} onChange={(event) => setExecutionConfig("asyncParameterValue", event.target.value === "true")}><option value="true">true</option><option value="false">false</option></select></label>}
+          <label><strong>Async 参数名（可选）</strong><input aria-label="Async Parameter Name" placeholder="例如 async" value={String(effectiveTaskConfig.asyncParameterName ?? "")} onChange={(event) => setExecutionConfig("asyncParameterName", event.target.value)} /></label>
+          {Boolean(effectiveTaskConfig.asyncParameterName) && <label><strong>Async 参数值</strong><select aria-label="Async Parameter Value" value={String(effectiveTaskConfig.asyncParameterValue ?? true)} onChange={(event) => setExecutionConfig("asyncParameterValue", event.target.value === "true")}><option value="true">true</option><option value="false">false</option></select></label>}
           <div className={styles.protocolNotice}>当前调用协议必须有一个能快速返回 task_id 或 status_url 的真实提交接口；仅切换执行方式不会把长连接接口变成异步接口。</div>
           {(value.adapterKey === "GEMINI_NATIVE_IMAGE" || !value.adapterKey) && <div className={styles.protocolNotice}>如果该 USELG Banana 渠道的真实异步入口是 /v1/images/generations + async=true，请选择 Generic OpenAI Images 协议；不要继续使用阻塞的 Gemini generateContent 协议。</div>}
           <details className={styles.adapterAdvanced}>
@@ -1886,6 +1895,8 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
                       <CostEditor capabilities={effectiveRouteCapabilities} modality={detail.modality} value={routeDraft.costProfile} onChange={(costProfile) => setRouteDrafts((current) => ({ ...current, [route.id]: { ...routeDraft, costProfile } }))} />
                       {detail.modality === "image" && <ImageAdapterEditor
                         routeId={route.id}
+                        upstreamModel={route.upstreamModelId}
+                        canonicalModelKey={detail.canonicalModelKey}
                         value={routeDraft}
                         supportsReferenceImages={supportsReferenceImages}
                         onChange={(next) => setRouteDrafts((current) => ({ ...current, [route.id]: next }))}

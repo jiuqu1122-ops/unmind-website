@@ -438,6 +438,8 @@ export function imageRouteExecutionMode(value: unknown): ImageRouteExecutionMode
 export function imageTaskExecutionConfigFor(
   profile: ImageTaskExecutionProfile | "",
   current: JsonObject | null | undefined = null,
+  adapterAsync?: boolean,
+  modelIdentities: readonly string[] = [],
 ): JsonObject {
   const shared = {
     taskIdPath: "task_id",
@@ -452,13 +454,22 @@ export function imageTaskExecutionConfigFor(
     urlPath: "url",
     submitTimeoutMs: 60000,
   };
-  if (profile === "USELG_IMAGE_TASK") return {
-    ...shared,
-    profile,
-    submitEndpoint: "",
-    statusEndpointTemplate: "/v1/images/tasks/{taskId}?view=summary",
-    ...current,
-  };
+  if (profile === "USELG_IMAGE_TASK") {
+    const config: JsonObject = {
+      ...shared,
+      profile,
+      submitEndpoint: "",
+      statusEndpointTemplate: "/v1/images/tasks/{taskId}?view=summary",
+      ...current,
+    };
+    const endpoint = typeof config.submitEndpoint === "string" ? config.submitEndpoint.trim() : "";
+    if (config.asyncParameterName == null
+      && modelIdentities.some(identity => /^(?:gptimage25|image25)/.test(identity.toLowerCase().replace(/[^a-z0-9]/g, "")))
+      && (endpoint === "/v1/images/generations" || endpoint === "/v1/images/edits")) {
+      return { ...config, asyncParameterName: "async", asyncParameterValue: config.asyncParameterValue ?? adapterAsync ?? true };
+    }
+    return config;
+  }
   if (profile === "GENERIC_TASK") return {
     ...shared,
     profile,

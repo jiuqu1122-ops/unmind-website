@@ -198,6 +198,89 @@ test("keeps image protocol and execution lifecycle independent", () => {
   assert.throws(() => validateImageRouteExecutionDraft("DIRECT", uselg), /不能保留 executionConfig/);
 });
 
+test("defaults only Image 2.5 standard USELG image tasks to the effective async contract", () => {
+  for (const submitEndpoint of ["/v1/images/generations", "/v1/images/edits"]) {
+    const saved = { profile: "USELG_IMAGE_TASK", submitEndpoint };
+    const config = imageTaskExecutionConfigFor("USELG_IMAGE_TASK", saved, undefined, ["gpt-image-2.5"]);
+    assert.equal(config.asyncParameterName, "async");
+    assert.equal(config.asyncParameterValue, true);
+    assert.deepEqual(saved, { profile: "USELG_IMAGE_TASK", submitEndpoint });
+    assert.doesNotThrow(() => validateImageRouteExecutionDraft("TASK", config));
+    const explicitFalse = imageTaskExecutionConfigFor("USELG_IMAGE_TASK", { ...saved, asyncParameterValue: false }, undefined, ["gpt-image-2.5"]);
+    assert.equal(explicitFalse.asyncParameterName, "async");
+    assert.equal(explicitFalse.asyncParameterValue, false);
+    assert.doesNotThrow(() => validateImageRouteExecutionDraft("TASK", explicitFalse));
+  }
+  for (const [profile, submitEndpoint] of [
+    ["GENERIC_TASK", "/v1/images/generations"], ["GENERIC_TASK", "/v1/images/edits"],
+    ["USELG_IMAGE_TASK", "/custom/image-tasks"], ["USELG_IMAGE_TASK", "/v1/images/generations?mode=custom"],
+  ]) {
+    const config = imageTaskExecutionConfigFor(profile, { submitEndpoint }, undefined, ["gpt-image-2.5"]);
+    assert.equal(config.asyncParameterName, undefined);
+    assert.equal(config.asyncParameterValue, undefined);
+  }
+  for (const asyncParameterName of ["async", "run_async"]) {
+    const config = imageTaskExecutionConfigFor("USELG_IMAGE_TASK", {
+      submitEndpoint: "/v1/images/generations", asyncParameterName, asyncParameterValue: false,
+    });
+    assert.equal(config.asyncParameterName, asyncParameterName);
+    assert.equal(config.asyncParameterValue, false);
+  }
+});
+
+test("keeps explicit execution async settings ahead of adapter flags and USELG defaults", () => {
+  const saved = { profile: "USELG_IMAGE_TASK", submitEndpoint: "/v1/images/generations" };
+  const identities = ["gpt-image-2.5"];
+  for (const adapterAsync of [true, false]) {
+    const implicit = imageTaskExecutionConfigFor("USELG_IMAGE_TASK", saved, adapterAsync, identities);
+    assert.equal(implicit.asyncParameterName, "async");
+    assert.equal(implicit.asyncParameterValue, adapterAsync);
+    assert.equal(imageTaskExecutionConfigFor("USELG_IMAGE_TASK", {
+      ...saved, asyncParameterValue: false,
+    }, adapterAsync, identities).asyncParameterValue, false);
+    for (const asyncParameterName of ["async", "run_async"]) {
+      const explicit = imageTaskExecutionConfigFor("USELG_IMAGE_TASK", {
+        ...saved, asyncParameterName, asyncParameterValue: true,
+      }, adapterAsync, identities);
+      assert.equal(explicit.asyncParameterName, asyncParameterName);
+      assert.equal(explicit.asyncParameterValue, true);
+      const defaultValue = imageTaskExecutionConfigFor("USELG_IMAGE_TASK", {
+        ...saved, asyncParameterName,
+      }, adapterAsync, identities);
+      assert.equal(defaultValue.asyncParameterValue ?? true, true);
+    }
+  }
+  const nullish = imageTaskExecutionConfigFor("USELG_IMAGE_TASK", {
+    ...saved, asyncParameterName: null, asyncParameterValue: null,
+  }, false, identities);
+  assert.equal(nullish.asyncParameterName, "async");
+  assert.equal(nullish.asyncParameterValue, false);
+  assert.deepEqual(saved, { profile: "USELG_IMAGE_TASK", submitEndpoint: "/v1/images/generations" });
+});
+
+test("keeps other models and identity-free callers on their existing explicit task contracts", () => {
+  const saved = { profile: "USELG_IMAGE_TASK", submitEndpoint: "/v1/images/generations" };
+  for (const identities of [[], ["gpt-image-2"], ["gpt-image-1"], ["nano-banana-2"], ["seedream-4.5"], ["midjourney-v7"], ["not-gpt-image-2.5"]]) {
+    for (const adapterAsync of [true, false]) {
+      const config = imageTaskExecutionConfigFor("USELG_IMAGE_TASK", saved, adapterAsync, identities);
+      assert.equal(config.asyncParameterName, undefined);
+      assert.equal(config.asyncParameterValue, undefined);
+      const explicit = imageTaskExecutionConfigFor("USELG_IMAGE_TASK", {
+        ...saved, asyncParameterName: "run_async", asyncParameterValue: false,
+      }, adapterAsync, identities);
+      assert.equal(explicit.asyncParameterName, "run_async");
+      assert.equal(explicit.asyncParameterValue, false);
+    }
+  }
+  for (const identity of ["gpt-image-2.5", "GPT_Image_2_5-high", "Image 2.5", "image-2-5-fixture"]) {
+    assert.equal(imageTaskExecutionConfigFor("USELG_IMAGE_TASK", saved, undefined, [identity]).asyncParameterName, "async");
+  }
+  const opaqueRoute = imageTaskExecutionConfigFor("USELG_IMAGE_TASK", saved, undefined,
+    ["opaque-upstream-alias", "gpt-image-2-5-sunburst"]);
+  assert.equal(opaqueRoute.asyncParameterName, "async");
+  assert.equal(opaqueRoute.asyncParameterValue, true);
+});
+
 test("normalizes dynamic video resolutions, durations, and aspect ratios", () => {
   assert.deepEqual(normalizeCapabilityOptions([" 768P ", "768p", "2K", "1280x768"], "resolution"), [
     "768p",
