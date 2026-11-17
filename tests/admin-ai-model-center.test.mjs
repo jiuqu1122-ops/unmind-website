@@ -422,6 +422,16 @@ test("keeps pricing, cost, and adapter validation schema-specific", () => {
   assert.throws(() => validateCostProfileDraft({ currency: "POINTS" }), /USD/);
 });
 
+test("accepts all confirmed Seedream reference serializers and explicit transports", () => {
+  for (const referenceSerializer of ["json_image", "json_images", "object_image_url"]) {
+    for (const referenceTransport of ["public_https", "data_url"]) {
+      assert.doesNotThrow(() => validateAdapterConfigDraft({ referenceSerializer, referenceTransport }));
+    }
+  }
+  assert.throws(() => validateAdapterConfigDraft({ referenceTransport: "private_url" }), /referenceTransport/);
+  assert.throws(() => validateAdapterConfigDraft({ referenceSerializer: "unconfirmed" }), /referenceSerializer/);
+});
+
 test("validates only explicit reference request overrides without adding defaults", () => {
   for (const config of [{}, { referenceRequestCount: 1 }, { referenceResponseFormat: "url" },
     { referenceTransport: "data_url", referenceRequestCount: 1, referenceResponseFormat: "b64_json" }]) {
@@ -824,4 +834,31 @@ test("exposes editable quality, quality cost and music controls in AI CENTER", a
   assert.ok(source.includes('value="audio"'));
   assert.ok(source.includes('capabilities={effectiveRouteCapabilities}'));
   assert.ok(source.includes('selectedBillingType === "music_flat"'));
+});
+
+
+test("multipart image[] selection preserves old route defaults and round-trips numeric reference and prompt limits", async () => {
+  const editor = await editorFixture(); const original = structuredClone(editor.value);
+  assert.match(editor.html(), /multipart_image_array/); assert.equal(editor.changes, 0);
+  assert.equal(editor.controls().has("参考图上限"), false);
+  editor.select("参考图格式", "multipart_image_array");
+  editor.select("参考图上限", "10");
+  editor.select("提示词字符上限", "8000");
+  editor.check("按原请求编号生成 Idempotency-Key", true);
+  const saved = JSON.parse(JSON.stringify(editor.value.adapterConfig)); validateAdapterConfigDraft(saved, "GENERIC_OPENAI_IMAGE");
+  assert.equal(saved.referenceSerializer, "multipart_image_array"); assert.equal(saved.maxReferenceImages, 10);
+  assert.equal(saved.maxPromptCharacters, 8000); assert.equal(saved.idempotencyHeader, "Idempotency-Key");
+  assert.equal(saved.enableTaskOperations, undefined);
+  assert.deepEqual(editor.value.executionConfig, original.executionConfig);
+  const reopened = await editorFixture({ adapterConfig: saved });
+  assert.equal(reopened.controls().get("参考图格式").props.value, "multipart_image_array");
+  assert.equal(reopened.controls().get("参考图上限").props.value, "10");
+  assert.equal(reopened.controls().get("提示词字符上限").props.value, "8000");
+  assert.equal(reopened.controls().get("参考图传输方式").props.disabled, true);
+});
+test("multipart settings reject invalid limits without relaxing legacy reference contracts", () => {
+  for (const value of [0, 11, 1.5, "10", null]) assert.throws(() => validateAdapterConfigDraft({ referenceSerializer: "multipart_image_array", maxReferenceImages: value }), /maxReferenceImages/);
+  assert.throws(() => validateAdapterConfigDraft({ maxReferenceImages: 10 }), /explicit/);
+  for (const value of [0, 32001, "8000", null]) assert.throws(() => validateAdapterConfigDraft({ maxPromptCharacters: value }), /maxPromptCharacters/);
+  assert.doesNotThrow(() => validateAdapterConfigDraft({ referenceSerializer: "multipart_image_array", maxReferenceImages: 10, maxPromptCharacters: 8000 }));
 });

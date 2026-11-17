@@ -47,3 +47,5 @@
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @media (max-width: 1050px) { .metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 560px) { .section { padding: 14px; } .metrics { grid-template-columns: 1fr; } .header { align-items: flex-start; } .pagination { flex-wrap: wrap; } }
+
+.detail { color: #b45309; display: block; word-break: break-word; }

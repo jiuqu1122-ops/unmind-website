@@ -32,6 +32,19 @@ test('error search and cursor are URL encoded, not concatenated raw', () => {
   const params = new URL(url, 'https://example.test').searchParams;
   assert.equal(params.get('query'), 'x&limit=999'); assert.equal(params.get('limit'), '25'); assert.equal(params.get('cursor'), 'abc');
 });
+test('accepts safe upstream detail and tolerates older diagnostics without it', async () => {
+  const modelSource = await readFile(path.join(root, 'app/admin/admin-usage-diagnostics-model.ts'), 'utf8');
+  const compiled = ts.transpileModule(modelSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
+  const currentModel = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+  const item = { id: 'r', clientRequestId: 'c', status: 'FAILED', kind: 'image', modelKey: 'm', modelName: 'M', channelName: null, upstreamModel: null,
+    user: { id: 'u', email: null, displayName: null }, createdAt: new Date().toISOString(), completedAt: null, durationMs: null, failedOutputCount: 0,
+    diagnostic: { version: 1, code: 'PROVIDER_PROMPT_TOO_LONG', message: 'Prompt is too long', stage: 'image_generation', httpStatus: 400, causeCode: null, recordedAt: new Date().toISOString(), resolution: null } };
+  const page = { total: 1, days: 1, snapshotAt: new Date().toISOString(), nextCursor: null, items: [item] };
+  assert.equal(currentModel.requireUsageErrorPage(page).items[0].diagnostic.detail, undefined);
+  item.diagnostic.detail = 'The prompt exceeds the upstream image service character limit.';
+  assert.equal(currentModel.requireUsageErrorPage(page).items[0].diagnostic.detail, item.diagnostic.detail);
+});
+
 test('malformed or empty API response is not rendered as zero statistics', () => {
   assert.throws(() => model.requireUsageMetrics({})); assert.throws(() => model.requireUsageErrorPage({}));
   assert.throws(() => model.requireUsageMetrics({ image: { averageMs: -1 }, models: [] }));
@@ -39,5 +52,6 @@ test('malformed or empty API response is not rendered as zero statistics', () =>
 test('component includes cancellation, version keys, explicit loading/error states, pagination and copy ID', async () => {
   const source = await readFile(path.join(root, 'app/admin/admin-usage-diagnostics.tsx'), 'utf8');
   for (const text of ['controller.abort()', 'controller.signal.aborted', 'metricsResource.key !== metricsKey', 'errorsResource.key !== errorKey', '上一页', '下一页', '未记录详细原因', '复制客户端请求 ID', 'UTC+8']) assert.ok(source.includes(text), text);
+  assert.ok(source.includes('item.diagnostic?.detail')); assert.ok(source.includes('styles.detail'));
   assert.ok(!source.includes('dangerouslySetInnerHTML')); assert.ok(!source.includes('window.alert'));
 });

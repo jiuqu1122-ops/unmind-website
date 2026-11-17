@@ -109,11 +109,11 @@ export function AdminUsageDiagnostics({ days, imageModel, refreshKey, request }:
             <td><strong>{item.modelName}</strong><small>{item.channelName || '渠道未记录'}</small></td>
             <td><span className={styles.badge}>{usageErrorStatus(item)}</span></td>
             <td className={styles.nowrap}>{formatUsageDuration(item.durationMs)}</td>
-            <td className={styles.reason}><strong>{item.diagnostic?.message || '未记录详细原因'}</strong><small>{item.diagnostic ? `${usageStageLabel(item.diagnostic.stage)}${item.diagnostic.httpStatus ? ` · HTTP ${item.diagnostic.httpStatus}` : ''}` : '该请求未保存可用的详细原因'}</small>
+            <td className={styles.reason}><strong>{item.diagnostic?.message || '未记录详细原因'}</strong>{item.diagnostic?.detail && <small className={styles.detail}>{item.diagnostic.detail}</small>}<small>{item.diagnostic ? `${usageStageLabel(item.diagnostic.stage)}${item.diagnostic.httpStatus ? ` · HTTP ${item.diagnostic.httpStatus}` : ''}` : '该请求未保存可用的详细原因'}</small>
               <details><summary>查看详情</summary><dl>
                 <dt>请求 ID</dt><dd>{item.id}</dd><dt>客户端请求 ID</dt><dd>{item.clientRequestId}</dd>
                 <dt>模型标识</dt><dd>{item.modelKey}</dd><dt>关联 Route 上游模型</dt><dd>{item.upstreamModel || '未记录'}</dd>
-                <dt>错误码</dt><dd>{item.diagnostic?.code || '未记录'}</dd><dt>底层错误码</dt><dd>{item.diagnostic?.causeCode || '未记录'}</dd>
+                <dt>错误码</dt><dd>{item.diagnostic?.code || '未记录'}</dd><dt>{"\u4e0a\u6e38\u8be6\u7ec6\u8bf4\u660e"}</dt><dd>{item.diagnostic?.detail || "\u672a\u8bb0\u5f55"}</dd><dt>底层错误码</dt><dd>{item.diagnostic?.causeCode || '未记录'}</dd>
                 <dt>请求清晰度</dt><dd>{item.diagnostic?.resolution || '未记录'}</dd><dt>记录完成时间</dt><dd>{item.completedAt ? time(item.completedAt) : '尚未完成'}</dd>
                 {item.recovery && <><dt>渠道任务 ID</dt><dd>{item.recovery.taskId || '未记录'}</dd><dt>恢复阶段 / 原因</dt><dd>{item.recovery.stage} / {item.recovery.reason}</dd></>}
                 {item.failedOutputCount > 0 && <><dt>失败视频输出</dt><dd>{item.failedOutputCount} 条</dd></>}

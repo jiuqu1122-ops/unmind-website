@@ -994,6 +994,8 @@ export function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, 
       requestParametersError = reasonMessage(reason, "固定请求参数无效");
     }
   }
+  const seedreamReferences = value.adapterKey === "SEEDREAM_IMAGES_API"
+    || (value.adapterKey === "GENERIC_OPENAI_IMAGE" && /^seedream(?:[-_.\s]|$)/i.test(upstreamModel.trim()));
   return (
     <div className={styles.structuredForm}>
       <label>
@@ -1003,11 +1005,14 @@ export function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, 
           value={value.adapterKey}
           onChange={(event) => {
             const adapterKey = event.target.value;
+            const compatibleReferenceAdapters = ["GENERIC_OPENAI_IMAGE", "SEEDREAM_IMAGES_API"];
+            const preserveConfig = compatibleReferenceAdapters.includes(value.adapterKey)
+              && compatibleReferenceAdapters.includes(adapterKey);
             onChange({
               ...value,
               adapterKey,
               requestParametersDraft: undefined,
-              adapterConfig: imageAdapterConfigFor(adapterKey, null),
+              adapterConfig: imageAdapterConfigFor(adapterKey, preserveConfig ? value.adapterConfig : null),
             });
           }}
         >
@@ -1058,31 +1063,40 @@ export function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, 
           <label><strong>Aspect Ratio</strong><select aria-label="Aspect Ratio 参数" value={String(config.aspectRatioParameter ?? "none")} onChange={(event) => setConfig("aspectRatioParameter", event.target.value)}><option value="none">不发送</option><option value="aspect_ratio">aspect_ratio</option></select></label>
           <label><strong>生成接口</strong><input aria-label="Generation Endpoint" value={String(config.generationEndpoint ?? "/v1/images/generations")} onChange={(event) => setConfig("generationEndpoint", event.target.value)} /></label>
           {(value.adapterKey === "SEEDREAM_IMAGES_API" || value.adapterKey === "GENERIC_OPENAI_IMAGE") && <label><strong>编辑接口（可选）</strong><input aria-label="Edit Endpoint" value={String(config.editEndpoint ?? (value.adapterKey === "SEEDREAM_IMAGES_API" ? "/v1/images/edits" : ""))} onChange={(event) => setConfig("editEndpoint", event.target.value)} /></label>}
-          {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <>
-            <label><strong>参考图格式</strong><select aria-label="参考图格式" value={referenceSerializer} onChange={(event) => setConfig("referenceSerializer", event.target.value || undefined)}><option value="">无</option><option value="json_image">单图 image</option><option value="json_images">多图 images</option><option value="object_image_url">对象数组 images[].image_url</option></select></label>
-            {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <label><strong>参考图传输方式</strong><select aria-label="参考图传输方式" value={String(config.referenceTransport ?? "")} onChange={(event) => setConfig("referenceTransport", event.target.value || undefined)}><option value="">跟随协议默认（未设置）</option><option value="public_https">公开 HTTPS 地址</option><option value="data_url">Data URL / Base64（显式启用）</option></select></label>}
-            {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <>
+          {(value.adapterKey === "GENERIC_OPENAI_IMAGE" || value.adapterKey === "SEEDREAM_IMAGES_API") && <>
+            <label><strong>参考图格式</strong><select aria-label="参考图格式" value={referenceSerializer} onChange={(event) => setConfig("referenceSerializer", event.target.value || undefined)}><option value="">无</option><option value="json_image">单图 image</option><option value="json_images">多图 images</option><option value="object_image_url">对象数组 images[].image_url</option><option value="multipart_image_array">文件上传 image[]（multipart）</option></select></label>
+            {referenceSerializer === "multipart_image_array" && <>
+              <label><strong>参考图上限</strong><input type="number" min={1} max={10} aria-label="参考图上限" value={String(config.maxReferenceImages ?? "")} placeholder="未设置时最多 9 张" onChange={(event) => setConfig("maxReferenceImages", event.target.value ? Number(event.target.value) : undefined)} /></label>
+              <label><strong>提示词字符上限</strong><input type="number" min={1} max={32000} aria-label="提示词字符上限" value={String(config.maxPromptCharacters ?? "")} placeholder="例如 8000" onChange={(event) => setConfig("maxPromptCharacters", event.target.value ? Number(event.target.value) : undefined)} /></label>
+              <small>有参考图时上传真实文件，重复使用 image[]；无参考图仍发送 JSON。必须配置 TASK 以保存原任务回执。文件上传不使用 URL/Data URL 传输设置；不会自动迁移旧路由配置。</small>
+            </>}
+            {seedreamReferences && <label><strong>参考图传输方式</strong><select disabled={referenceSerializer === "multipart_image_array"} aria-label="参考图传输方式" value={String(config.referenceTransport ?? "public_https")} onChange={(event) => setConfig("referenceTransport", event.target.value)}><option value="public_https">公开 HTTPS 临时地址</option><option value="data_url">Data URL / Base64（渠道需支持）</option></select></label>}
+            {value.adapterKey === "GENERIC_OPENAI_IMAGE" && !seedreamReferences && <label><strong>参考图传输方式</strong><select disabled={referenceSerializer === "multipart_image_array"} aria-label="参考图传输方式" value={String(config.referenceTransport ?? "")} onChange={(event) => setConfig("referenceTransport", event.target.value || undefined)}><option value="">跟随协议默认（未设置）</option><option value="public_https">公开 HTTPS 地址</option><option value="data_url">Data URL / Base64（显式启用）</option></select></label>}
+            {(value.adapterKey === "GENERIC_OPENAI_IMAGE" || value.adapterKey === "SEEDREAM_IMAGES_API" && referenceSerializer === "multipart_image_array") && <>
               <label><strong>参考图请求数量 n</strong><select aria-label="参考图请求数量 n" value={String(config.referenceRequestCount ?? "")} onChange={(event) => setConfig("referenceRequestCount", event.target.value === "1" ? 1 : undefined)}><option value="">跟随协议默认（未设置）</option><option value="1">1（客户端需选择 1 组）</option></select></label>
               <label><strong>参考图返回格式 response_format</strong><select aria-label="参考图返回格式 response_format" value={String(config.referenceResponseFormat ?? "")} onChange={(event) => setConfig("referenceResponseFormat", event.target.value || undefined)}><option value="">跟随协议默认（未设置）</option><option value="url">url</option><option value="b64_json">b64_json</option></select></label>
             </>}
           </>}
         </div>
-        {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <>
-          <label className={styles.jsonEditor}>
-            <strong>固定请求参数</strong>
-            <textarea aria-label="固定请求参数" aria-invalid={Boolean(requestParametersError)} rows={5}
-              placeholder={'{"operation":"imagine","speed":"fast","n":1}'}
-              value={requestParametersText}
-              onChange={(event) => onChange({ ...value, requestParametersDraft: event.target.value })} />
-            <small>仅此 Generic 路由生效，文生图与参考图请求共用。V8.2 示例：{"{\"operation\":\"imagine\",\"speed\":\"fast\",\"n\":1}"}。只允许字符串、数字和布尔值；尺寸、质量及图片等协议字段不可覆盖。空白或 {"{}"} 清除配置；固定 n 必须与客户端请求数量一致。</small>
-            {requestParametersError && <span role="alert">{requestParametersError}</span>}
-          </label>
+        {(value.adapterKey === "GENERIC_OPENAI_IMAGE" || value.adapterKey === "SEEDREAM_IMAGES_API" && referenceSerializer === "multipart_image_array") && <>
           <label className={styles.inlineCheck}>
             <input type="checkbox" aria-label="按原请求编号生成 Idempotency-Key"
               checked={config.idempotencyHeader === "Idempotency-Key"}
               onChange={(event) => setConfig("idempotencyHeader", event.target.checked ? "Idempotency-Key" : undefined)} />
             按原请求编号生成 Idempotency-Key
           </label>
+        </>}
+        {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <>
+          <label className={styles.jsonEditor}>
+            <strong>固定请求参数</strong>
+            <textarea aria-label="固定请求参数" aria-invalid={Boolean(requestParametersError)} rows={5}
+              placeholder={referenceSerializer === "multipart_image_array" ? '{"n":1,"response_format":"url"}' : '{"operation":"imagine","speed":"fast","n":1}'}
+              value={requestParametersText}
+              onChange={(event) => onChange({ ...value, requestParametersDraft: event.target.value })} />
+            <small>仅此 Generic 路由生效，文生图与参考图请求共用。V8.2 示例：{"{\"operation\":\"imagine\",\"speed\":\"fast\",\"n\":1}"}。只允许字符串、数字和布尔值；尺寸、质量及图片等协议字段不可覆盖。空白或 {"{}"} 清除配置；固定 n 必须与客户端请求数量一致。</small>
+            {requestParametersError && <span role="alert">{requestParametersError}</span>}
+          </label>
+
           <label className={styles.inlineCheck}>
             <input type="checkbox" aria-label="保留任务与按钮信息（供后续操作使用）"
               checked={config.preserveTaskMetadata === true}
@@ -1090,7 +1104,7 @@ export function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, 
             保留任务与按钮信息（供后续操作使用）
           </label>
           <small>仅保留信息，不触发额外操作或计费。</small>
-          {(executionMode === "TASK" && taskProfile === "GENERIC_TASK" || config.enableTaskOperations === true) && <>
+          {referenceSerializer !== "multipart_image_array" && (executionMode === "TASK" && taskProfile === "GENERIC_TASK" || config.enableTaskOperations === true) && <>
             <label className={styles.inlineCheck}>
               <input type="checkbox" aria-label="开放任务后续操作接口"
                 checked={config.enableTaskOperations === true}
@@ -1100,7 +1114,8 @@ export function ImageAdapterEditor({ routeId, upstreamModel, canonicalModelKey, 
             <small>需配置 Generic Task、保留任务信息、Idempotency-Key，以及固定 operation=imagine、speed 和 n=1。开放接口不会自动执行操作；用户调用时按已发布的操作与速度价格计费。</small>
           </>}
         </>}
-        {value.adapterKey === "GENERIC_OPENAI_IMAGE" && supportsReferenceImages && !referenceSerializer && <div className={styles.inlineProtocolWarning}>该 Route 支持参考图，但尚未确认参考图序列化字段。</div>}
+        {(value.adapterKey === "GENERIC_OPENAI_IMAGE" || value.adapterKey === "SEEDREAM_IMAGES_API") && supportsReferenceImages && !referenceSerializer && <div className={styles.inlineProtocolWarning}>该 Route 支持参考图，但尚未确认参考图序列化字段。</div>}
+        {seedreamReferences && <div className={styles.protocolNotice}>Seedream 参考图由服务端读取并校验后按此设置发送。公开地址在本服务器可访问，不代表上游安全策略允许；选择 Data URL 前需确认渠道支持。失败后不会自动切换格式重新生成。</div>}
         {value.adapterKey === "GENERIC_OPENAI_IMAGE" && <div className={styles.protocolNotice}>“参考图请求数量”和“参考图返回格式”仅在请求含参考图时生效；固定请求参数会同时用于文生图和参考图请求。Data URL 仅在渠道文档确认支持时启用；未设置时保留现有传输方式。配置 n=1 时客户端需选择 1 组，不会自动改写请求数量。</div>}
         {config.resolutionValueMode === "exact" && <details><summary>配置 exact dimension mapping</summary><p>只会发送这里明确填写的像素值；未配置的分辨率与比例组合会停止请求，不会猜测尺寸。</p><div className={styles.formGrid}>{["1K", "2K", "4K"].flatMap((resolution) => ["1:1", "16:9", "9:16", "3:2", "2:3", "4:3", "3:4"].map((aspectRatio) => <label key={`${resolution}:${aspectRatio}`}><strong>{resolution} · {aspectRatio}</strong><input aria-label={`${resolution} ${aspectRatio} exact dimension`} placeholder="例如 1672x941" value={String(objectValue(objectValue(config.exactDimensions)[resolution])[aspectRatio] ?? "")} onChange={(event) => setExactDimension(resolution, aspectRatio, event.target.value)} /></label>))}</div></details>}
         <details className={styles.adapterAdvanced}><summary>协议高级 JSON（只读）</summary><pre>{formatJson(config)}</pre></details>

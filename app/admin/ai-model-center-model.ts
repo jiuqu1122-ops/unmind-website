@@ -9,7 +9,9 @@ export type AiUsageModelKey = "IMAGE_ANALYSIS" | "CANVAS_TEXT";
 export type ImageRouteExecutionMode = "INHERIT" | "DIRECT" | "TASK";
 export type ImageTaskExecutionProfile = "USELG_IMAGE_TASK" | "GENERIC_TASK";
 export type ImageReferenceConfig = {
-  referenceSerializer?: "json_image" | "json_images" | "object_image_url";
+  referenceSerializer?: "json_image" | "json_images" | "object_image_url" | "multipart_image_array";
+  maxReferenceImages?: number;
+  maxPromptCharacters?: number;
   referenceTransport?: "data_url" | "public_https";
   referenceRequestCount?: 1;
   referenceResponseFormat?: "url" | "b64_json";
@@ -529,7 +531,7 @@ export function validateAdapterConfigDraft(adapterConfig: JsonObject, adapterKey
     resolutionParameter: ["none", "size", "resolution"],
     aspectRatioParameter: ["none", "aspect_ratio", "ratio"],
     referenceSerialization: ["array"],
-    referenceSerializer: ["json_image", "json_images", "object_image_url"],
+    referenceSerializer: ["json_image", "json_images", "object_image_url", "multipart_image_array"],
     referenceTransport: ["public_https", "data_url"],
     referenceResponseFormat: ["url", "b64_json"],
   };
@@ -539,6 +541,15 @@ export function validateAdapterConfigDraft(adapterConfig: JsonObject, adapterKey
       throw new Error(`${key} 配置无效`);
     }
   });
+  for (const [key, maximum] of [["maxReferenceImages", 10], ["maxPromptCharacters", 32000]] as const) {
+    const value = adapterConfig[key];
+    if (value !== undefined && (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > maximum)) {
+      throw new Error(`${key} must be an integer between 1 and ${maximum}`);
+    }
+  }
+  if (adapterConfig.maxReferenceImages === 10 && adapterConfig.referenceSerializer !== "multipart_image_array") {
+    throw new Error("10 references require explicit multipart image[] file upload");
+  }
   if (adapterConfig.referenceRequestCount !== undefined && adapterConfig.referenceRequestCount !== 1) {
     throw new Error("referenceRequestCount 只能设置为数字 1，或保持未设置");
   }

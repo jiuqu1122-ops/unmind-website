@@ -79,7 +79,7 @@ export type ReviewShare = {
   previews: Array<{ id: string; url: string }>;
 };
 
-export type AdminProviderKind = "NEW_API" | "XAIS" | "MIKOTO" | "BIGMODEL" | "MINIMAX" | "USELG";
+export type AdminProviderKind = "NEW_API" | "OPENAI_COMPATIBLE" | "XAIS" | "MIKOTO" | "BIGMODEL" | "MINIMAX" | "USELG";
 export type AdminProviderCapability =
   | "LLM"
   | "VISION"
@@ -226,6 +226,12 @@ export const providerMeta: Record<AdminProviderKind, {
     defaultBaseUrl: "",
     placeholder: "https://your-new-api.example.com",
   },
+  OPENAI_COMPATIBLE: {
+    label: "OpenAI Compatible",
+    defaultName: "OpenAI Compatible Channel",
+    defaultBaseUrl: "",
+    placeholder: "https://your-provider.example.com/v1",
+  },
   XAIS: {
     label: "XAIS",
     defaultName: "XAIS / DCHAI 主渠道",
@@ -269,6 +275,7 @@ const defaultProviderModel = (kind: AdminProviderKind) => {
 const defaultProviderCapabilities = (kind: AdminProviderKind): AdminProviderCapability[] => {
   if (kind === "MINIMAX") return ["VIDEO_MINIMAX"];
   if (kind === "USELG" || kind === "BIGMODEL") return ["IMAGE"];
+  if (kind === "OPENAI_COMPATIBLE") return ["LLM", "IMAGE"];
   return ["LLM"];
 };
 

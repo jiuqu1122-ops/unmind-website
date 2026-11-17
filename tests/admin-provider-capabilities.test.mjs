@@ -10,6 +10,7 @@ import {
 
 test("new channels keep only a coarse legacy capability fallback", () => {
   assert.deepEqual(newProviderDraft("NEW_API").capabilities, ["LLM"]);
+  assert.deepEqual(newProviderDraft("OPENAI_COMPATIBLE").capabilities, ["LLM", "IMAGE"]);
   assert.deepEqual(newProviderDraft("USELG").capabilities, ["IMAGE"]);
   assert.deepEqual(newProviderDraft("BIGMODEL").capabilities, ["IMAGE"]);
   assert.deepEqual(newProviderDraft("MINIMAX").capabilities, ["VIDEO_MINIMAX"]);

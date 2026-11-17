@@ -11,7 +11,7 @@ export type UsageErrorItem = {
   createdAt: string; completedAt: string | null; durationMs: number | null; failedOutputCount: number;
   recovery?: { state: string; reason: string; stage: string; taskId: string | null };
   diagnostic: null | {
-    version: 1; code: string; message: string; stage: string; httpStatus: number | null;
+    version: 1; code: string; message: string; detail?: string | null; stage: string; httpStatus: number | null;
     causeCode: string | null; recordedAt: string; resolution: string | null;
   };
 };
@@ -89,7 +89,8 @@ export function requireUsageErrorPage(value: unknown): UsageErrorPage {
       return row && user && typeof row.id === 'string' && typeof row.clientRequestId === 'string'
         && typeof row.status === 'string' && typeof row.modelName === 'string'
         && typeof row.modelKey === 'string' && typeof row.createdAt === 'string'
-        && typeof user.id === 'string' && (row.diagnostic === null || (diag && typeof diag.message === 'string' && typeof diag.code === 'string'));
+        && typeof user.id === 'string' && (row.diagnostic === null || (diag && typeof diag.message === 'string' && typeof diag.code === 'string'
+          && (diag.detail === undefined || diag.detail === null || typeof diag.detail === 'string')));
     })) throw new Error('错误记录响应格式无效，请刷新或检查服务端版本');
   return value as UsageErrorPage;
 }
