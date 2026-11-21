@@ -40,6 +40,7 @@ import {
   type AdminAiModelDetail,
   type AdminAiModelSummary,
   type AdminAiUsageModelBindings,
+  type AdminLayerTasks,
   type AiUsageModelKey,
   type AiModelModality,
   type AiModelRoute,
@@ -48,6 +49,8 @@ import {
   type ImageRouteExecutionMode,
   type ImageAdapterConfig,
   type JsonObject,
+  type LayerTaskMode,
+  type LayerTaskRouteConfig,
   type VideoBillingType,
 } from "./ai-model-center-model";
 import styles from "./admin.module.css";
@@ -611,15 +614,14 @@ function CapabilitiesEditor({ modality, value, onChange, compact = false }: {
     return (
       <div className={styles.structuredForm} data-compact={compact}>
         <div className={styles.formGrid}>
-          <label><strong>普通上下文上限</strong><input type="number" min={1} value={textValue(standard.maxInputTokens)} onChange={(event) => updateTier(0, "maxInputTokens", event.target.value)} /><small>输入 Token</small></label>
-          <label><strong>长上下文起点</strong><input type="number" min={1} value={textValue(extended.minInputTokens)} onChange={(event) => updateTier(1, "minInputTokens", event.target.value)} /><small>输入 Token</small></label>
+          <label><strong>普通上下文上限</strong><input type="number" min={1} value={String(standard.maxInputTokens ?? "")} onChange={(event) => updateTier(0, "maxInputTokens", event.target.value)} /><small>输入 Token</small></label>
+          <label><strong>长上下文起点</strong><input type="number" min={1} value={String(extended.minInputTokens ?? "")} onChange={(event) => updateTier(1, "minInputTokens", event.target.value)} /><small>输入 Token</small></label>
         </div>
-        {(Object.hasOwn(value, "supportsCaching") || Object.hasOwn(value, "supportsTools")) && (
-          <div className={styles.switchGrid}>
-            {Object.hasOwn(value, "supportsCaching") && <SwitchField label="支持缓存" hint="展示真实服务端能力" checked={Boolean(value.supportsCaching)} onChange={(next) => update("supportsCaching", next)} />}
-            {Object.hasOwn(value, "supportsTools") && <SwitchField label="支持工具" hint="允许模型调用工具" checked={Boolean(value.supportsTools)} onChange={(next) => update("supportsTools", next)} />}
-          </div>
-        )}
+        <div className={styles.switchGrid}>
+          <SwitchField label="支持图片输入" hint="确认上游支持识图后开启，可用于图片分析" checked={value.supportsVision === true} onChange={(next) => update("supportsVision", next)} />
+          {Object.hasOwn(value, "supportsCaching") && <SwitchField label="支持缓存" hint="展示真实服务端能力" checked={Boolean(value.supportsCaching)} onChange={(next) => update("supportsCaching", next)} />}
+          {Object.hasOwn(value, "supportsTools") && <SwitchField label="支持工具" hint="允许模型调用工具" checked={Boolean(value.supportsTools)} onChange={(next) => update("supportsTools", next)} />}
+        </div>
       </div>
     );
   }
@@ -1226,69 +1228,131 @@ function VideoAdapterEditor({ value, onChange }: {
 }
 
 const canvasLayerModes = [
-  { id: "split", flag: "supportsLayerSplit", label: "图层拆分", hint: "输出底图与可移动的透明图层" },
-  { id: "edit", flag: "supportsInteractiveEdit", label: "交互编辑", hint: "支持整图和单层的点选、框选编辑" },
+  { id: "split", label: "图层拆分", hint: "输出底图与可移动的透明图层" },
+  { id: "edit", label: "交互编辑", hint: "支持整图和单层的点选、框选编辑" },
 ] as const;
 
-function CanvasLayerRouteEditor({ model, mode, request, onError, onNotice }: {
-  model: AdminAiModelDetail;
-  mode: typeof canvasLayerModes[number]["id"];
+const imageAnalysisReasons = {
+  DISABLED_MODEL: "模型未启用",
+  UNPUBLISHED_MODEL: "模型未发布",
+  NO_ACTIVE_ROUTE: "没有可用渠道路由",
+  NO_VISION_CAPABILITY: "可用路由未标记支持图片输入",
+};
+
+const layerTasksPath = "/v1/admin/ai-models/layer-tasks";
+
+function CanvasLayerTaskCards({ request, onError, onNotice }: Pick<Props, "request" | "onError" | "onNotice">) {
+  const [settings, setSettings] = useState<AdminLayerTasks>();
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    void request<AdminLayerTasks>(layerTasksPath).then((result) => {
+      if (active) setSettings(result);
+    }, (reason) => {
+      if (active) setError(reasonMessage(reason, "无法读取图层任务配置"));
+    });
+    return () => { active = false; };
+  }, [request]);
+
+  if (!settings) return <p className={error ? styles.inlineWarning : styles.protocolNotice}>{error || "正在读取图层任务配置…"}</p>;
+  const refresh = async () => setSettings(await request<AdminLayerTasks>(layerTasksPath));
+  return canvasLayerModes.map((task) => <CanvasLayerTaskCard key={task.id}
+    task={task} settings={settings} request={request} onError={onError} onNotice={onNotice} refresh={refresh} />);
+}
+
+function CanvasLayerTaskCard({ task, settings, request, onError, onNotice, refresh }: {
+  task: typeof canvasLayerModes[number];
+  settings: AdminLayerTasks;
   request: AdminRequest;
   onError: Props["onError"];
   onNotice: Props["onNotice"];
+  refresh: () => Promise<void>;
 }) {
-  const routes = model.routes.filter(route => route.channel);
-  const [routeId, setRouteId] = useState(routes.find(route => route.id === model.defaultRouteId)?.id ?? routes[0]?.id ?? "");
-  const [drafts, setDrafts] = useState<Record<string, JsonObject>>({});
+  const mode: LayerTaskMode = task.id;
+  const current = settings.items[mode];
+  const [selectedModelKey, setSelectedModelKey] = useState<string>();
+  const [selectedRouteId, setSelectedRouteId] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, Partial<LayerTaskRouteConfig>>>({});
   const [saving, setSaving] = useState(false);
-  const route = routes.find(entry => entry.id === routeId);
-  const saved = objectValue(objectValue(objectValue(route?.metadata).canvasLayers)[mode]);
-  const config = drafts[routeId] ?? saved;
+  const modelKey = selectedModelKey ?? current.modelKey ?? "";
+  const model = settings.models.find(entry => entry.canonicalModelKey === modelKey);
+  const routes = model?.routes ?? [];
+  const route = routes.find(entry => entry.id === selectedRouteId)
+    ?? routes.find(entry => entry.id === current.currentRoute?.id)
+    ?? routes.find(entry => entry.id === model?.defaultRouteId)
+    ?? routes[0];
+  const saved = route?.configs[mode];
+  const config = (route && drafts[route.id]) ?? saved ?? {};
   const adapter = textValue(config.adapter) || (route?.channel?.kind === "VOLCENGINE_ARK" ? "volcengine-ark" : "canvas-json");
   const ark = adapter === "volcengine-ark";
   const endpoint = config.endpoint === undefined && ark ? "/images/generations" : textValue(config.endpoint);
   const maxMegapixels = config.maxMegapixels ?? (ark && mode === "split" ? 64 : 16);
   const maxLayers = config.maxLayers ?? (ark ? 32 : 24);
-  const change = (key: string, value: unknown) => setDrafts(current => ({ ...current, [routeId]: { ...config, [key]: value } }));
+  const change = <K extends keyof LayerTaskRouteConfig>(key: K, value: LayerTaskRouteConfig[K]) => {
+    if (route) setDrafts(previous => ({ ...previous, [route.id]: { ...config, [key]: value } }));
+  };
   const save = async (remove = false) => {
     if (!route) return;
     setSaving(true);
     try {
       const payload = {
         enabled: config.enabled === true, endpoint, adapter,
-        creditsPerRequest: textValue(config.creditsPerRequest ?? config.baseCredits),
-        maxMegapixels: Number(maxMegapixels), maxLayers: mode === "split" ? Number(maxLayers) : 1,
+        creditsPerRequest: textValue(config.creditsPerRequest),
+        maxMegapixels, maxLayers: mode === "split" ? maxLayers : 1,
       };
-      await request(`/v1/admin/ai-models/${encodeURIComponent(model.canonicalModelKey)}/layer-routes/${encodeURIComponent(route.id)}/${mode}`, {
-        method: "PUT", body: JSON.stringify({ config: remove ? null : payload }),
+      await request(`${layerTasksPath}/${mode}`, {
+        method: "PUT", body: JSON.stringify({ modelKey, routeId: route.id, config: remove ? null : payload }),
       });
-      setDrafts(current => ({ ...current, [routeId]: remove ? {} : payload }));
-      onNotice(remove ? "已移除此渠道的画布能力配置" : "渠道配置已保存");
-    } catch (error) { onError(reasonMessage(error, "无法保存画布能力配置")); }
+      onNotice(remove ? `已移除${task.label}的渠道配置` : `${task.label}配置已保存`);
+      await refresh();
+      setDrafts(previous => {
+        const next = { ...previous };
+        delete next[route.id];
+        return next;
+      });
+    } catch (error) { onError(reasonMessage(error, `无法更新${task.label}配置`)); }
     finally { setSaving(false); }
   };
-  if (!routes.length) return <p className={styles.inlineWarning}>请先为这个模型添加带渠道的路由，再配置此能力。</p>;
-  return <div className={styles.structuredForm}>
+  const routeAvailable = (entry: NonNullable<typeof route>) => entry.enabled && entry.upstreamAvailable && entry.channel.status === "ACTIVE";
+  const currentRoute = current.currentRoute;
+  const currentRouteLabel = currentRoute
+    ? `${currentRoute.channelName} · ${currentRoute.upstreamModelId} · ${Number(currentRoute.creditsPerRequest)} 积分 / 次`
+    : "无可用调用路由";
+  return <section className={styles.editorCard} aria-label={task.label} aria-busy={saving}>
+    <header><div><h4>{task.label}</h4></div>
+      <div>
+        {saved && <button type="button" className={styles.ghost} disabled={saving} onClick={() => void save(true)}>移除该配置</button>}
+        <button type="button" disabled={saving || !route || (config.enabled === true && !routeAvailable(route))} onClick={() => void save()}>{saving ? "正在保存…" : "保存任务配置"}</button>
+      </div>
+    </header>
+    <p className={styles.taskModelHint}>{task.hint}</p>
     <div className={styles.formGrid}>
-      <label><strong>渠道与上游模型</strong><select value={routeId} onChange={event => setRouteId(event.target.value)}>
-        {routes.map(entry => <option key={entry.id} value={entry.id}>{entry.channel?.name} · {entry.upstreamModelId}{entry.enabled ? "" : "（路由停用）"}</option>)}
+      <label><strong>任务模型</strong><select aria-label={`${task.label}任务模型`} value={modelKey} disabled={saving} onChange={event => { setSelectedModelKey(event.target.value); setSelectedRouteId(""); }}>
+        <option value="">请选择图片模型</option>
+        {modelKey && !model && <option value={modelKey}>{current.modelName ?? modelKey}（当前不可用）</option>}
+        {settings.models.map(entry => <option key={entry.canonicalModelKey} value={entry.canonicalModelKey}>{entry.displayName} · {entry.canonicalModelKey}</option>)}
       </select></label>
-      <label><strong>请求路径</strong><input value={endpoint} placeholder="/path/to/operation" onChange={event => change("endpoint", event.target.value)} /></label>
-      <label><strong>适配器</strong><select value={adapter} onChange={event => change("adapter", event.target.value)}>
-        <option value="canvas-json">画布 JSON · 归一化选区</option><option value="pixel-json">像素 JSON · 像素选区</option>
-        <option value="volcengine-ark">火山方舟 · Seedream</option>
-        {mode === "edit" && <option value="images-api-edit">Images API · 提示词引导</option>}
-      </select></label>
-      <NumericInput label="每次运行积分" unit="积分 / 次"
-        value={config.creditsPerRequest ?? config.baseCredits} onChange={value => change("creditsPerRequest", value)} />
-      <label><strong>输出总像素上限（百万）</strong><input type="number" min={1} max={64} value={textValue(maxMegapixels)} onChange={event => change("maxMegapixels", event.target.value)} /></label>
-      {mode === "split" && <label><strong>图层上限（不含底图）</strong><input type="number" min={1} max={64} value={textValue(maxLayers)} onChange={event => change("maxLayers", event.target.value)} /></label>}
-      <SwitchField label="启用该渠道" hint="优先使用已启用的默认路由，其次按路由优先级选择" checked={config.enabled === true} onChange={next => change("enabled", next)} />
+      {route && <label><strong>渠道与上游模型</strong><select value={route.id} disabled={saving} onChange={event => setSelectedRouteId(event.target.value)}>
+        {routes.map(entry => <option key={entry.id} value={entry.id}>{entry.channel.name} · {entry.upstreamModelId}{routeAvailable(entry) ? "" : "（路由不可用）"}</option>)}
+      </select></label>}
+      <label><strong>当前调用路由</strong><input value={currentRouteLabel} disabled /></label>
     </div>
-    <div><button type="button" disabled={saving || !route} onClick={() => void save()}>保存渠道配置</button>
-      {(Object.keys(saved).length > 0 || config.endpoint !== undefined) && <button type="button" className={styles.ghost} disabled={saving} onClick={() => void save(true)}>移除该配置</button>}
-    </div>
-  </div>;
+    {!settings.models.length && <p className={styles.inlineWarning}>请先发布并启用一个已配置渠道路由的图片模型。</p>}
+    {route && <fieldset className={styles.layerTaskFields} disabled={saving}>
+      <div className={styles.formGrid}>
+        <label><strong>请求路径</strong><input value={endpoint} placeholder="/path/to/operation" onChange={event => change("endpoint", event.target.value)} /></label>
+        <label><strong>适配器</strong><select value={adapter} onChange={event => change("adapter", event.target.value)}>
+          <option value="canvas-json">画布 JSON · 归一化选区</option><option value="pixel-json">像素 JSON · 像素选区</option>
+          <option value="volcengine-ark">火山方舟 · Seedream</option>
+          {mode === "edit" && <option value="images-api-edit">Images API · 提示词引导</option>}
+        </select></label>
+        <NumericInput label="每次运行积分" unit="积分 / 次" value={config.creditsPerRequest} onChange={value => change("creditsPerRequest", value)} />
+        <label><strong>输出总像素上限（百万）</strong><input type="number" min={1} max={64} value={maxMegapixels || ""} onChange={event => change("maxMegapixels", Number(event.target.value))} /></label>
+        {mode === "split" && <label><strong>图层上限（不含底图）</strong><input type="number" min={1} max={64} value={maxLayers || ""} onChange={event => change("maxLayers", Number(event.target.value))} /></label>}
+        <SwitchField label="为此任务启用该渠道" hint="保存后优先使用所选模型及渠道" checked={config.enabled === true} onChange={next => change("enabled", next)} />
+      </div>
+    </fieldset>}
+  </section>;
 }
 
 export function AiModelCenter({ request, providers, onError, onNotice }: Props) {
@@ -1946,23 +2010,46 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
       {view === "usage" ? (
         <section className={styles.modelEditor} aria-busy={loading || busy}>
           <header className={styles.modelEditorHeader}>
-            <div><span>USAGE MODEL BINDINGS</span><h3>任务模型</h3><p>业务用途绑定 canonical Chat 模型；真实上游渠道仍由服务端路由决定。</p></div>
+            <div><h3>任务模型</h3><p>按任务设置调用模型、渠道和积分。</p></div>
           </header>
           <div className={styles.editorSectionGrid}>
             {(["IMAGE_ANALYSIS", "CANVAS_TEXT"] as const).map((key) => {
+              const isAnalysis = key === "IMAGE_ANALYSIS";
               const binding = usageBindings.items.find((item) => item.key === key);
               const candidates = usageBindings.candidates[key];
+              const excluded = usageBindings.imageAnalysisExcluded ?? [];
               const selectedStillAvailable = candidates.some((candidate) => candidate.id === usageDrafts[key]);
               const currentRouteLabel = binding?.route
                 ? `${binding.route.channel?.name ?? binding.route.provider} · ${binding.route.upstreamModelId}`
                 : "无可用调用路由";
               return <section className={styles.editorCard} key={key}>
-                <header><div><span>{key === "IMAGE_ANALYSIS" ? "01" : "02"}</span><h4>{key === "IMAGE_ANALYSIS" ? "图片分析" : "文字节点 / 提示词优化"}</h4></div><button type="button" disabled={busy || !usageDrafts[key]} onClick={() => void saveUsageBinding(key)}>{busy ? "正在保存…" : "保存"}</button></header>
-                <p>{key === "IMAGE_ANALYSIS" ? "仅列出具备 operational Vision route 的 Chat 模型。" : "canvas_text_agent 与 prompt_optimization 共用此模型；普通 Chat 不受影响。"}</p>
-                <div className={styles.formGrid}><label><strong>当前 canonical 模型</strong><select aria-label={key === "IMAGE_ANALYSIS" ? "图片分析任务模型" : "文字节点任务模型"} value={usageDrafts[key]} onChange={(event) => setUsageDrafts((current) => ({ ...current, [key]: event.target.value }))}><option value="">请选择模型</option>{usageDrafts[key] && !selectedStillAvailable && <option value={usageDrafts[key]}>{binding?.displayName ?? binding?.canonicalModelKey ?? "当前模型"}（当前不可用）</option>}{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.displayName} · {candidate.canonicalModelKey}</option>)}</select></label><label><strong>固定收费</strong><input aria-label={`${key} 固定收费`} inputMode="decimal" value={usageFixedCreditDrafts[key]} onChange={(event) => setUsageFixedCreditDrafts((current) => ({ ...current, [key]: event.target.value }))} /><small>积分 / 次</small></label><label><strong>当前路由</strong><input value={currentRouteLabel} disabled /></label></div>
-                {!binding?.operational && <div className={styles.inlineWarning}>无可用调用路由。服务端会返回 USAGE_MODEL_NOT_AVAILABLE，不会静默切换模型。</div>}
+                <header><div><h4>{isAnalysis ? "图片分析" : "文字节点 / 提示词优化"}</h4></div><button type="button" disabled={busy || !selectedStillAvailable} onClick={() => void saveUsageBinding(key)}>{busy ? "正在保存…" : "保存"}</button></header>
+                <p className={styles.taskModelHint}>{isAnalysis ? `当前有 ${candidates.length} 个可选模型。模型需已发布、启用，并有可用且支持图片输入的路由。` : "画布文字节点与提示词优化共用此模型。"}</p>
+                <div className={styles.formGrid}>
+                  <label><strong>任务模型</strong><select aria-label={isAnalysis ? "图片分析任务模型" : "文字节点任务模型"} value={usageDrafts[key]} onChange={(event) => setUsageDrafts((current) => ({ ...current, [key]: event.target.value }))}>
+                    <option value="">请选择模型</option>
+                    {usageDrafts[key] && !selectedStillAvailable && <option value={usageDrafts[key]}>{binding?.displayName ?? binding?.canonicalModelKey ?? "当前模型"}（当前不可用）</option>}
+                    {candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.displayName} · {candidate.canonicalModelKey}</option>)}
+                  </select></label>
+                  <label><strong>固定收费</strong><input aria-label={`${key} 固定收费`} inputMode="decimal" value={usageFixedCreditDrafts[key]} onChange={(event) => setUsageFixedCreditDrafts((current) => ({ ...current, [key]: event.target.value }))} /><small>积分 / 次</small></label>
+                  <label><strong>当前调用路由</strong><input value={currentRouteLabel} disabled /></label>
+                </div>
+                {!binding?.operational && <div className={styles.inlineWarning}>当前任务无法调用，请选择一个可用模型并保存。</div>}
+                {isAnalysis && excluded.length > 0 && <details className={styles.taskModelDiagnostics}>
+                  <summary>查看其他模型为何不可选（{excluded.length}）</summary>
+                  <ul>{excluded.map((model) => <li key={model.id}>
+                    <button type="button" className={styles.ghost} title={model.canonicalModelKey} onClick={() => requestNavigation("查看 Chat 模型", () => {
+                      setStatusFilter("all");
+                      setQuery("");
+                      setView("chat");
+                      void loadDetail(model.canonicalModelKey);
+                    })}>{model.displayName}</button>
+                    <span>{imageAnalysisReasons[model.reason]}</span>
+                  </li>)}</ul>
+                </details>}
               </section>;
             })}
+            <CanvasLayerTaskCards request={request} onError={onError} onNotice={onNotice} />
           </div>
         </section>
       ) : view === "unmapped" ? (
@@ -2106,11 +2193,6 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
               <section className={styles.editorCard}>
                 <header><div><span>04</span><h4>模型能力</h4></div><button type="button" disabled={busy} onClick={() => void saveSettings()}>保存能力</button></header>
                 <CapabilitiesEditor modality={detail.modality} value={capabilities} onChange={setCapabilities} />
-                {detail.modality === "image" && canvasLayerModes.map(mode => <div key={detail.id + mode.id} className={styles.structuredForm}>
-                  <SwitchField label={mode.label} hint={mode.hint} checked={capabilities[mode.flag] === true}
-                    onChange={enabled => setCapabilities(current => ({ ...current, [mode.flag]: enabled }))} />
-                  {capabilities[mode.flag] === true && <CanvasLayerRouteEditor model={detail} mode={mode.id} request={request} onError={onError} onNotice={onNotice} />}
-                </div>)}
               </section>
             </div>
 

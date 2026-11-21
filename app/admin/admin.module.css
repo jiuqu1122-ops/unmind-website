@@ -296,6 +296,12 @@
 .editorCard > header > div > span { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 7px; background: #eaf1ff; color: #2868ed; font-size: 8px; font-weight: 900; }
 .editorCard > header h4 { margin: 0; font-size: 14px; }
 .editorCard > header > small { color: #7c899c; font-size: 9px; }
+.taskModelHint { margin: 0; color: #536177; font-size: 11px; }
+.layerTaskFields { min-inline-size: 0; margin: 0; padding: 12px 0 0; border: 0; border-top: 1px solid #e4e8ef; }
+.taskModelDiagnostics { color: #536177; font-size: 11px; }
+.taskModelDiagnostics summary { cursor: pointer; }
+.taskModelDiagnostics ul { display: grid; gap: 6px; max-block-size: 230px; overflow: auto; margin: 8px 0 0; padding: 0; list-style: none; }
+.taskModelDiagnostics li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .editorCard .formGrid label,.structuredForm label,.numberField,.thresholdField,.routeCostEditor > label,.pricingPolicyV2 label { display: grid; gap: 5px; color: #536177; font-size: 9px; }
 .switchGrid { display: grid; grid-template-columns: repeat(2,1fr); gap: 7px; }
 .switchField { position: relative; padding: 11px; display: flex!important; align-items: center; justify-content: flex-start; gap: 10px; border: 1px solid #e3e8f0; border-radius: 10px; background: #fafcff; cursor: pointer; }

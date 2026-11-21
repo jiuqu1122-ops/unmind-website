@@ -705,6 +705,42 @@ export type AdminAiUsageModelBindings = {
     canonicalModelKey: string;
     displayName: string;
   }>>;
+  imageAnalysisExcluded?: Array<{
+    id: string;
+    canonicalModelKey: string;
+    displayName: string;
+    reason: "DISABLED_MODEL" | "UNPUBLISHED_MODEL" | "NO_ACTIVE_ROUTE" | "NO_VISION_CAPABILITY";
+  }>;
+};
+
+export type LayerTaskMode = "split" | "edit";
+export type LayerTaskRouteConfig = {
+  enabled: boolean;
+  endpoint: string;
+  adapter: string;
+  creditsPerRequest: string;
+  maxMegapixels: number;
+  maxLayers: number;
+};
+export type AdminLayerTasks = {
+  items: Record<LayerTaskMode, {
+    modelKey: string | null;
+    modelName: string | null;
+    currentRoute: { id: string; channelName: string; upstreamModelId: string; creditsPerRequest: string } | null;
+  }>;
+  models: Array<{
+    canonicalModelKey: string;
+    displayName: string;
+    defaultRouteId: string | null;
+    routes: Array<{
+      id: string;
+      upstreamModelId: string;
+      enabled: boolean;
+      upstreamAvailable: boolean;
+      channel: { name: string; kind: string; status: string };
+      configs: Record<LayerTaskMode, LayerTaskRouteConfig | null>;
+    }>;
+  }>;
 };
 
 export type AiUpstreamDiscovery = {

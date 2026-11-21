@@ -165,7 +165,10 @@ test("keeps capabilities and execution JSON read-only while operational controls
   assert.match(source, /480p.*540p.*576p.*720p.*768p.*1080p.*1440p.*2k.*4k/);
   assert.match(source, /\+ 添加规格/);
   assert.match(source, /MINIMAX_NATIVE_VIDEO/);
-  assert.match(source, /USAGE_MODEL_NOT_AVAILABLE/);
+  assert.match(source, /当前任务无法调用，请选择一个可用模型并保存/);
+  assert.match(source, /查看其他模型为何不可选/);
+  assert.match(source, /label="支持图片输入"/);
+  assert.match(source, /<CanvasLayerTaskCards request=\{request\}/);
   assert.match(source, /JSON\.stringify\(\{ canonicalModelKey: target \}\)/);
   assert.match(source, /body: JSON\.stringify\(draft\)/);
   assert.match(source, /modalityOverride/);
