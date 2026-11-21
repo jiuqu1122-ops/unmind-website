@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   newProviderDraft,
   normalizePricing,
+  providerMeta,
   pricingLabel,
   providerToDraft,
 } from "../app/admin/admin-model.ts";
@@ -14,6 +15,11 @@ test("new channels keep only a coarse legacy capability fallback", () => {
   assert.deepEqual(newProviderDraft("USELG").capabilities, ["IMAGE"]);
   assert.deepEqual(newProviderDraft("BIGMODEL").capabilities, ["IMAGE"]);
   assert.deepEqual(newProviderDraft("MINIMAX").capabilities, ["VIDEO_MINIMAX"]);
+  assert.deepEqual(newProviderDraft("VOLCENGINE_ARK").capabilities, ["IMAGE"]);
+  assert.equal(newProviderDraft("VOLCENGINE_ARK").apiKey, "");
+  assert.equal(newProviderDraft("VOLCENGINE_ARK").defaultModel, "");
+  assert.equal(newProviderDraft("VOLCENGINE_ARK").baseUrl, "");
+  assert.equal(providerMeta.VOLCENGINE_ARK.placeholder, "https://ark.cn-beijing.volces.com/api/v3");
 });
 
 test("editing a channel preserves its legacy capability data without exposing model checkboxes", async () => {

@@ -1225,6 +1225,72 @@ function VideoAdapterEditor({ value, onChange }: {
   );
 }
 
+const canvasLayerModes = [
+  { id: "split", flag: "supportsLayerSplit", label: "图层拆分", hint: "输出底图与可移动的透明图层" },
+  { id: "edit", flag: "supportsInteractiveEdit", label: "交互编辑", hint: "支持整图和单层的点选、框选编辑" },
+] as const;
+
+function CanvasLayerRouteEditor({ model, mode, request, onError, onNotice }: {
+  model: AdminAiModelDetail;
+  mode: typeof canvasLayerModes[number]["id"];
+  request: AdminRequest;
+  onError: Props["onError"];
+  onNotice: Props["onNotice"];
+}) {
+  const routes = model.routes.filter(route => route.channel);
+  const [routeId, setRouteId] = useState(routes.find(route => route.id === model.defaultRouteId)?.id ?? routes[0]?.id ?? "");
+  const [drafts, setDrafts] = useState<Record<string, JsonObject>>({});
+  const [saving, setSaving] = useState(false);
+  const route = routes.find(entry => entry.id === routeId);
+  const saved = objectValue(objectValue(objectValue(route?.metadata).canvasLayers)[mode]);
+  const config = drafts[routeId] ?? saved;
+  const adapter = textValue(config.adapter) || (route?.channel?.kind === "VOLCENGINE_ARK" ? "volcengine-ark" : "canvas-json");
+  const ark = adapter === "volcengine-ark";
+  const endpoint = config.endpoint === undefined && ark ? "/images/generations" : textValue(config.endpoint);
+  const maxMegapixels = config.maxMegapixels ?? (ark && mode === "split" ? 64 : 16);
+  const maxLayers = config.maxLayers ?? (ark ? 32 : 24);
+  const change = (key: string, value: unknown) => setDrafts(current => ({ ...current, [routeId]: { ...config, [key]: value } }));
+  const save = async (remove = false) => {
+    if (!route) return;
+    setSaving(true);
+    try {
+      const payload = {
+        enabled: config.enabled === true, endpoint, adapter,
+        creditsPerRequest: textValue(config.creditsPerRequest ?? config.baseCredits),
+        maxMegapixels: Number(maxMegapixels), maxLayers: mode === "split" ? Number(maxLayers) : 1,
+      };
+      await request(`/v1/admin/ai-models/${encodeURIComponent(model.canonicalModelKey)}/layer-routes/${encodeURIComponent(route.id)}/${mode}`, {
+        method: "PUT", body: JSON.stringify({ config: remove ? null : payload }),
+      });
+      setDrafts(current => ({ ...current, [routeId]: remove ? {} : payload }));
+      onNotice(remove ? "已移除此渠道的画布能力配置" : "渠道配置已保存");
+    } catch (error) { onError(reasonMessage(error, "无法保存画布能力配置")); }
+    finally { setSaving(false); }
+  };
+  if (!routes.length) return <p className={styles.inlineWarning}>请先为这个模型添加带渠道的路由，再配置此能力。</p>;
+  return <div className={styles.structuredForm}>
+    <div className={styles.formGrid}>
+      <label><strong>渠道与上游模型</strong><select value={routeId} onChange={event => setRouteId(event.target.value)}>
+        {routes.map(entry => <option key={entry.id} value={entry.id}>{entry.channel?.name} · {entry.upstreamModelId}{entry.enabled ? "" : "（路由停用）"}</option>)}
+      </select></label>
+      <label><strong>请求路径</strong><input value={endpoint} placeholder="/path/to/operation" onChange={event => change("endpoint", event.target.value)} /></label>
+      <label><strong>适配器</strong><select value={adapter} onChange={event => change("adapter", event.target.value)}>
+        <option value="canvas-json">画布 JSON · 归一化选区</option><option value="pixel-json">像素 JSON · 像素选区</option>
+        <option value="volcengine-ark">火山方舟 · Seedream</option>
+        {mode === "edit" && <option value="images-api-edit">Images API · 提示词引导</option>}
+      </select></label>
+      <NumericInput label="每次运行积分" unit="积分 / 次"
+        value={config.creditsPerRequest ?? config.baseCredits} onChange={value => change("creditsPerRequest", value)} />
+      <label><strong>输出总像素上限（百万）</strong><input type="number" min={1} max={64} value={textValue(maxMegapixels)} onChange={event => change("maxMegapixels", event.target.value)} /></label>
+      {mode === "split" && <label><strong>图层上限（不含底图）</strong><input type="number" min={1} max={64} value={textValue(maxLayers)} onChange={event => change("maxLayers", event.target.value)} /></label>}
+      <SwitchField label="启用该渠道" hint="优先使用已启用的默认路由，其次按路由优先级选择" checked={config.enabled === true} onChange={next => change("enabled", next)} />
+    </div>
+    <div><button type="button" disabled={saving || !route} onClick={() => void save()}>保存渠道配置</button>
+      {(Object.keys(saved).length > 0 || config.endpoint !== undefined) && <button type="button" className={styles.ghost} disabled={saving} onClick={() => void save(true)}>移除该配置</button>}
+    </div>
+  </div>;
+}
+
 export function AiModelCenter({ request, providers, onError, onNotice }: Props) {
   const [supported, setSupported] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -2040,6 +2106,11 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
               <section className={styles.editorCard}>
                 <header><div><span>04</span><h4>模型能力</h4></div><button type="button" disabled={busy} onClick={() => void saveSettings()}>保存能力</button></header>
                 <CapabilitiesEditor modality={detail.modality} value={capabilities} onChange={setCapabilities} />
+                {detail.modality === "image" && canvasLayerModes.map(mode => <div key={detail.id + mode.id} className={styles.structuredForm}>
+                  <SwitchField label={mode.label} hint={mode.hint} checked={capabilities[mode.flag] === true}
+                    onChange={enabled => setCapabilities(current => ({ ...current, [mode.flag]: enabled }))} />
+                  {capabilities[mode.flag] === true && <CanvasLayerRouteEditor model={detail} mode={mode.id} request={request} onError={onError} onNotice={onNotice} />}
+                </div>)}
               </section>
             </div>
 

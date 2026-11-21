@@ -1191,11 +1191,12 @@ export function AdminConsole() {
               <label><strong>API Base URL</strong><input value={providerDraft.baseUrl} onChange={(event) => setProviderDraft((current) => ({ ...current, baseUrl: event.target.value }))} placeholder={providerMeta[providerDraft.kind].placeholder} spellCheck={false} /></label>
               <div className={styles.formGrid}>
                 <label><strong>调用优先级</strong><input type="number" min={0} max={9999} value={providerDraft.priority} onChange={(event) => setProviderDraft((current) => ({ ...current, priority: Math.min(9999, Math.max(0, Number(event.target.value) || 0)) }))} /></label>
-                <label><strong>旧版兼容默认模型</strong><input value={providerDraft.defaultModel} onChange={(event) => setProviderDraft((current) => ({ ...current, defaultModel: event.target.value }))} spellCheck={false} /></label>
+                <label><strong>{providerDraft.kind === "VOLCENGINE_ARK" ? "额外的 Model ID 或接入点 ID（选填）" : "旧版兼容默认模型"}</strong><input value={providerDraft.defaultModel} onChange={(event) => setProviderDraft((current) => ({ ...current, defaultModel: event.target.value }))} placeholder={providerDraft.kind === "VOLCENGINE_ARK" ? "ep-…" : undefined} spellCheck={false} /></label>
               </div>
               <label><strong>API Key</strong><input type="password" value={providerDraft.apiKey} onChange={(event) => setProviderDraft((current) => ({ ...current, apiKey: event.target.value }))} placeholder={providerDraft.id ? `留空保留 ****${providers.find((item) => item.id === providerDraft.id)?.apiKeyLast4 || ""}` : "填写上游 API Key"} autoComplete="new-password" /></label>
               <div className={styles.routingHint}>
                 模型、能力与实际路由统一在 AI Model Center 中管理；这里仅维护渠道连接。旧版能力数据会继续保留用于兼容旧客户端。
+                {providerDraft.kind === "VOLCENGINE_ARK" && <> 如需使用自建推理接入点，填入接入点 ID，再到 AI Model Center 同步并映射到图片模型。</>}
               </div>
               <label className={styles.inlineCheck}><input type="checkbox" checked={providerDraft.allowInsecureHttp} onChange={(event) => setProviderDraft((current) => ({ ...current, allowInsecureHttp: event.target.checked }))} />允许明文 HTTP</label>
               {providerDraft.id && <label className={styles.inlineCheck}><input type="checkbox" checked={providerDraft.replaceHeaders} onChange={(event) => setProviderDraft((current) => ({ ...current, replaceHeaders: event.target.checked, headersText: "{}" }))} />替换已有自定义 Headers</label>}
@@ -1204,7 +1205,7 @@ export function AdminConsole() {
               {providerBalance && <div className={styles.providerStatus}><strong>{providerBalance.unlimited ? "无限额度" : formatCredits(providerBalance.totalAvailable)}</strong><small>{providerBalance.display} · {providerBalance.endpoint}</small></div>}
               <div className={styles.actionRow}>
                 <button className={styles.danger} type="button" disabled={!providerDraft.id || busy} onClick={() => void deleteProvider()}>删除渠道</button>
-                <button className={styles.ghost} type="button" disabled={!providerDraft.id || busy} onClick={() => void queryProviderBalance()}>查询余额</button>
+                {providerDraft.kind !== "VOLCENGINE_ARK" && <button className={styles.ghost} type="button" disabled={!providerDraft.id || busy} onClick={() => void queryProviderBalance()}>查询余额</button>}
                 <button className={styles.ghost} type="button" disabled={!providerDraft.id || busy} onClick={() => void testProvider()}>测试连接</button>
                 <button disabled={busy}>{providerDraft.id ? "保存修改" : "保存渠道"}</button>
               </div>

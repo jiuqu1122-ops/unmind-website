@@ -79,7 +79,7 @@ export type ReviewShare = {
   previews: Array<{ id: string; url: string }>;
 };
 
-export type AdminProviderKind = "NEW_API" | "OPENAI_COMPATIBLE" | "XAIS" | "MIKOTO" | "BIGMODEL" | "MINIMAX" | "USELG";
+export type AdminProviderKind = "NEW_API" | "OPENAI_COMPATIBLE" | "XAIS" | "MIKOTO" | "BIGMODEL" | "MINIMAX" | "USELG" | "VOLCENGINE_ARK";
 export type AdminProviderCapability =
   | "LLM"
   | "VISION"
@@ -262,6 +262,12 @@ export const providerMeta: Record<AdminProviderKind, {
     defaultBaseUrl: "https://api.uselg.top/v1",
     placeholder: "https://api.uselg.top/v1",
   },
+  VOLCENGINE_ARK: {
+    label: "火山方舟",
+    defaultName: "火山方舟",
+    defaultBaseUrl: "",
+    placeholder: "https://ark.cn-beijing.volces.com/api/v3",
+  },
 };
 
 export const providerKinds = (Object.keys(providerMeta) as AdminProviderKind[]);
@@ -274,7 +280,7 @@ const defaultProviderModel = (kind: AdminProviderKind) => {
 
 const defaultProviderCapabilities = (kind: AdminProviderKind): AdminProviderCapability[] => {
   if (kind === "MINIMAX") return ["VIDEO_MINIMAX"];
-  if (kind === "USELG" || kind === "BIGMODEL") return ["IMAGE"];
+  if (kind === "USELG" || kind === "BIGMODEL" || kind === "VOLCENGINE_ARK") return ["IMAGE"];
   if (kind === "OPENAI_COMPATIBLE") return ["LLM", "IMAGE"];
   return ["LLM"];
 };
