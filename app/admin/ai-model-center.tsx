@@ -1298,7 +1298,7 @@ function CanvasLayerTaskCard({ task, settings, request, onError, onNotice, refre
     try {
       const unit = config.creditsPerOutputImage?.trim();
       if (!remove && perImage && !/^\d{1,8}(?:\.\d{1,6})?$/.test(unit ?? "")) {
-        throw new Error("请填写每张积分，最多支持 8 位整数和 6 位小数");
+        throw new Error("请填写每层积分，最多支持 8 位整数和 6 位小数");
       }
       const payload = {
         enabled: config.enabled === true, endpoint, adapter,
@@ -1323,7 +1323,7 @@ function CanvasLayerTaskCard({ task, settings, request, onError, onNotice, refre
   const currentRoute = current.currentRoute;
   const currentRouteLabel = currentRoute
     ? `${currentRoute.channelName} · ${currentRoute.upstreamModelId} · ${currentRoute.creditsPerOutputImage !== undefined
-      ? `${Number(currentRoute.creditsPerOutputImage)} 积分 / 张（含底图）` : `${Number(currentRoute.creditsPerRequest)} 积分 / 次`}`
+      ? `${Number(currentRoute.creditsPerOutputImage)} 积分 / 层（含底图）` : `${Number(currentRoute.creditsPerRequest)} 积分 / 次`}`
     : "无可用调用路由";
   return <section className={styles.editorCard} aria-label={task.label} aria-busy={saving}>
     <header><div><h4>{task.label}</h4></div>
@@ -1354,13 +1354,13 @@ function CanvasLayerTaskCard({ task, settings, request, onError, onNotice, refre
           {mode === "edit" && <option value="images-api-edit">Images API · 提示词引导</option>}
         </select></label>
         {mode === "split" && <label><strong>计费方式</strong><select value={perImage ? "image" : "request"}
-          onChange={event => change("creditsPerOutputImage", event.target.value === "image" ? "" : undefined)}>
-          <option value="request">按次</option><option value="image">按交付张数（含底图）</option>
+          onChange={event => change("creditsPerOutputImage", event.target.value === "image" ? (saved?.creditsPerOutputImage ?? "20") : undefined)}>
+          <option value="request">按次</option><option value="image">按交付层数（含底图）</option>
         </select></label>}
         {perImage
-          ? <label className={styles.numberField}><strong>每张积分（含底图）</strong><div>
-              <input inputMode="decimal" placeholder="填写每张单价" value={config.creditsPerOutputImage ?? ""}
-                onChange={event => change("creditsPerOutputImage", event.target.value)} /><small>积分 / 张</small>
+          ? <label className={styles.numberField}><strong>每层积分（含底图）</strong><div>
+              <input inputMode="decimal" placeholder="填写每层单价" value={config.creditsPerOutputImage ?? ""}
+                onChange={event => change("creditsPerOutputImage", event.target.value)} /><small>积分 / 层</small>
             </div></label>
           : <NumericInput label="每次运行积分" unit="积分 / 次" value={config.creditsPerRequest} onChange={value => change("creditsPerRequest", value)} />}
         <label><strong>输出总像素上限（百万）</strong><input type="number" min={1} max={64} value={maxMegapixels || ""} onChange={event => change("maxMegapixels", Number(event.target.value))} /></label>
