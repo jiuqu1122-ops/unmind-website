@@ -718,7 +718,8 @@ export type LayerTaskRouteConfig = {
   enabled: boolean;
   endpoint: string;
   adapter: string;
-  creditsPerRequest: string;
+  creditsPerRequest?: string;
+  creditsPerOutputImage?: string;
   maxMegapixels: number;
   maxLayers: number;
 };
@@ -726,7 +727,7 @@ export type AdminLayerTasks = {
   items: Record<LayerTaskMode, {
     modelKey: string | null;
     modelName: string | null;
-    currentRoute: { id: string; channelName: string; upstreamModelId: string; creditsPerRequest: string } | null;
+    currentRoute: { id: string; channelName: string; upstreamModelId: string; creditsPerRequest: string; creditsPerOutputImage?: string } | null;
   }>;
   models: Array<{
     canonicalModelKey: string;
