@@ -5,7 +5,7 @@ export type AiModelStatus = "DRAFT" | "PUBLISHED" | "RETIRED";
 export type AiRoutingMode = "LEGACY" | "MANAGED";
 export type AiPricingMode = "MANUAL" | "MARKUP";
 export type VideoBillingType = "video_flat" | "video_second" | "video_duration" | "video_resolution_duration";
-export type AiUsageModelKey = "IMAGE_ANALYSIS" | "CANVAS_TEXT";
+export type AiUsageModelKey = "IMAGE_ANALYSIS" | "CANVAS_TEXT" | "WEB_SEARCH";
 export type ImageRouteExecutionMode = "INHERIT" | "DIRECT" | "TASK";
 export type ImageTaskExecutionProfile = "USELG_IMAGE_TASK" | "GENERIC_TASK";
 export type ImageReferenceConfig = {
@@ -704,6 +704,7 @@ export type AdminAiUsageModelBindings = {
     id: string;
     canonicalModelKey: string;
     displayName: string;
+    billingType?: string;
   }>>;
   imageAnalysisExcluded?: Array<{
     id: string;

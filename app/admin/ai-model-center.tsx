@@ -1382,15 +1382,18 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
   const [unmapped, setUnmapped] = useState<AiUpstreamDiscovery[]>([]);
   const [usageBindings, setUsageBindings] = useState<AdminAiUsageModelBindings>({
     items: [],
-    candidates: { IMAGE_ANALYSIS: [], CANVAS_TEXT: [] },
+    candidates: { IMAGE_ANALYSIS: [], CANVAS_TEXT: [], WEB_SEARCH: [] },
   });
   const [usageDrafts, setUsageDrafts] = useState<Record<AiUsageModelKey, string>>({
     IMAGE_ANALYSIS: "",
     CANVAS_TEXT: "",
+    WEB_SEARCH: "",
   });
+  const [searchBilling, setSearchBilling] = useState<"fixed" | "token">("fixed");
   const [usageFixedCreditDrafts, setUsageFixedCreditDrafts] = useState<Record<AiUsageModelKey, string>>({
     IMAGE_ANALYSIS: "1",
     CANVAS_TEXT: "1",
+    WEB_SEARCH: "0",
   });
   const [selectedKey, setSelectedKey] = useState("");
   const [detail, setDetail] = useState<AdminAiModelDetail | null>(null);
@@ -1485,10 +1488,14 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
       setUsageDrafts({
         IMAGE_ANALYSIS: usagePage.items.find((item) => item.key === "IMAGE_ANALYSIS")?.canonicalModelId ?? "",
         CANVAS_TEXT: usagePage.items.find((item) => item.key === "CANVAS_TEXT")?.canonicalModelId ?? "",
+        WEB_SEARCH: usagePage.items.find((item) => item.key === "WEB_SEARCH")?.canonicalModelId ?? "",
       });
+      const searchBinding = usagePage.items.find((item) => item.key === "WEB_SEARCH");
+      setSearchBilling(searchBinding?.canonicalModelId && searchBinding.fixedCredits === null ? "token" : "fixed");
       setUsageFixedCreditDrafts({
         IMAGE_ANALYSIS: usagePage.items.find((item) => item.key === "IMAGE_ANALYSIS")?.fixedCredits ?? "1",
         CANVAS_TEXT: usagePage.items.find((item) => item.key === "CANVAS_TEXT")?.fixedCredits ?? "1",
+        WEB_SEARCH: usagePage.items.find((item) => item.key === "WEB_SEARCH")?.fixedCredits ?? "0",
       });
       setCreateDrafts((current) => Object.fromEntries(unmappedPage.items.map((item) => {
         const inferred = createDraftFor(item);
@@ -1527,7 +1534,7 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
         setSupported(false);
         setModels([]);
         setUnmapped([]);
-        setUsageBindings({ items: [], candidates: { IMAGE_ANALYSIS: [], CANVAS_TEXT: [] } });
+        setUsageBindings({ items: [], candidates: { IMAGE_ANALYSIS: [], CANVAS_TEXT: [], WEB_SEARCH: [] } });
         setDetail(null);
       } else {
         onError(reasonMessage(reason, "AI 模型目录读取失败"));
@@ -1879,21 +1886,26 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
     }
   };
 
+  const usageModelLabels: Record<AiUsageModelKey, string> = {
+    IMAGE_ANALYSIS: "图片分析",
+    CANVAS_TEXT: "文字节点 / 提示词优化",
+    WEB_SEARCH: "联网搜索",
+  };
   const saveUsageBinding = async (key: AiUsageModelKey) => {
     const canonicalModelId = usageDrafts[key];
-    const fixedCredits = usageFixedCreditDrafts[key].trim();
+    const fixedCredits = key === "WEB_SEARCH" && searchBilling === "token" ? null : usageFixedCreditDrafts[key].trim();
     if (!canonicalModelId) {
       onError("请选择可用的 Chat 模型");
       return;
     }
-    if (!/^(?:0|[1-9]\d{0,11})(?:\.\d{1,6})?$/.test(fixedCredits)) {
+    if (fixedCredits !== null && !/^(?:0|[1-9]\d{0,11})(?:\.\d{1,6})?$/.test(fixedCredits)) {
       onError("固定收费必须是非负数，最多保留 6 位小数");
       return;
     }
     await perform(() => request(`/v1/admin/ai-models/usage-model-bindings/${key}`, {
       method: "PATCH",
       body: JSON.stringify({ canonicalModelId, fixedCredits }),
-    }), key === "IMAGE_ANALYSIS" ? "图片分析任务模型已保存" : "文字节点任务模型已保存");
+    }), `${usageModelLabels[key]}任务模型已保存`);
   };
 
   const deleteModel = () => {
@@ -2029,28 +2041,38 @@ export function AiModelCenter({ request, providers, onError, onNotice }: Props) 
             <div><h3>任务模型</h3><p>按任务设置调用模型、渠道和积分。</p></div>
           </header>
           <div className={styles.editorSectionGrid}>
-            {(["IMAGE_ANALYSIS", "CANVAS_TEXT"] as const).map((key) => {
+            {(["IMAGE_ANALYSIS", "CANVAS_TEXT", "WEB_SEARCH"] as const).map((key) => {
               const isAnalysis = key === "IMAGE_ANALYSIS";
               const binding = usageBindings.items.find((item) => item.key === key);
-              const candidates = usageBindings.candidates[key];
+              const isSearch = key === "WEB_SEARCH";
+              const availableModels = usageBindings.candidates[key] ?? [];
+              const candidates = isSearch && searchBilling === "token"
+                ? availableModels.filter(candidate => candidate.billingType === "token")
+                : availableModels;
               const excluded = usageBindings.imageAnalysisExcluded ?? [];
               const selectedStillAvailable = candidates.some((candidate) => candidate.id === usageDrafts[key]);
               const currentRouteLabel = binding?.route
                 ? `${binding.route.channel?.name ?? binding.route.provider} · ${binding.route.upstreamModelId}`
                 : "无可用调用路由";
               return <section className={styles.editorCard} key={key}>
-                <header><div><h4>{isAnalysis ? "图片分析" : "文字节点 / 提示词优化"}</h4></div><button type="button" disabled={busy || !selectedStillAvailable} onClick={() => void saveUsageBinding(key)}>{busy ? "正在保存…" : "保存"}</button></header>
-                <p className={styles.taskModelHint}>{isAnalysis ? `当前有 ${candidates.length} 个可选模型。模型需已发布、启用，并有可用且支持图片输入的路由。` : "画布文字节点与提示词优化共用此模型。"}</p>
+                <header><div><h4>{usageModelLabels[key]}</h4></div><button type="button" disabled={busy || !selectedStillAvailable} onClick={() => void saveUsageBinding(key)}>{busy ? "正在保存…" : "保存"}</button></header>
+                <p className={styles.taskModelHint}>{isAnalysis ? `当前有 ${candidates.length} 个可选模型。模型需已发布、启用，并有可用且支持图片输入的路由。` : isSearch
+                  ? "为 SearXNG 找到的网页排序。模型不可用时继续使用搜索引擎排序。"
+                  : "画布文字节点与提示词优化共用此模型。"}</p>
                 <div className={styles.formGrid}>
-                  <label><strong>任务模型</strong><select aria-label={isAnalysis ? "图片分析任务模型" : "文字节点任务模型"} value={usageDrafts[key]} onChange={(event) => setUsageDrafts((current) => ({ ...current, [key]: event.target.value }))}>
+                  <label><strong>任务模型</strong><select aria-label={`${key === "CANVAS_TEXT" ? "文字节点" : usageModelLabels[key]}任务模型`} value={usageDrafts[key]} onChange={(event) => setUsageDrafts((current) => ({ ...current, [key]: event.target.value }))}>
                     <option value="">请选择模型</option>
                     {usageDrafts[key] && !selectedStillAvailable && <option value={usageDrafts[key]}>{binding?.displayName ?? binding?.canonicalModelKey ?? "当前模型"}（当前不可用）</option>}
                     {candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.displayName} · {candidate.canonicalModelKey}</option>)}
                   </select></label>
-                  <label><strong>固定收费</strong><input aria-label={`${key} 固定收费`} inputMode="decimal" value={usageFixedCreditDrafts[key]} onChange={(event) => setUsageFixedCreditDrafts((current) => ({ ...current, [key]: event.target.value }))} /><small>积分 / 次</small></label>
+                  {isSearch && <label><strong>计费方式</strong><select aria-label="联网搜索计费方式" value={searchBilling} onChange={event => setSearchBilling(event.target.value === "token" ? "token" : "fixed")}>
+                    <option value="fixed">固定积分</option>
+                    <option value="token">按 Token</option>
+                  </select>{searchBilling === "token" && <small>按所选模型发布的 Token 售价结算。</small>}</label>}
+                  {(!isSearch || searchBilling === "fixed") && <label><strong>固定收费</strong><input aria-label={`${key} 固定收费`} inputMode="decimal" value={usageFixedCreditDrafts[key]} onChange={(event) => setUsageFixedCreditDrafts((current) => ({ ...current, [key]: event.target.value }))} /><small>积分 / 次</small></label>}
                   <label><strong>当前调用路由</strong><input value={currentRouteLabel} disabled /></label>
                 </div>
-                {!binding?.operational && <div className={styles.inlineWarning}>当前任务无法调用，请选择一个可用模型并保存。</div>}
+                {!binding?.operational && <div className={styles.inlineWarning}>{key === "WEB_SEARCH" ? "当前使用搜索引擎排序。选择模型并保存后启用模型排序。" : "当前任务无法调用，请选择一个可用模型并保存。"}</div>}
                 {isAnalysis && excluded.length > 0 && <details className={styles.taskModelDiagnostics}>
                   <summary>查看其他模型为何不可选（{excluded.length}）</summary>
                   <ul>{excluded.map((model) => <li key={model.id}>
